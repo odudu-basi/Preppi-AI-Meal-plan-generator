@@ -9,6 +9,11 @@ import SwiftUI
 
 @main
 struct Preppi_AIApp: App {
+    init() {
+        // Initialize RevenueCat service on app launch
+        _ = RevenueCatService.shared
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
