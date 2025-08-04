@@ -296,6 +296,7 @@ struct MealPlanDetailView: View {
     @State private var errorMessage: String?
     @State private var selectedDayIndex = 0
     @State private var generatingRecipeForMealId: UUID? = nil
+    @State private var generatingImageForMealId: UUID? = nil
     @State private var showingShoppingList = false
     @EnvironmentObject var appState: AppState
     @StateObject private var openAIService = OpenAIService.shared
@@ -532,6 +533,38 @@ struct MealPlanDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+                        
+                        // View Image Button (only show when no image exists)
+                        Button {
+                            print("🔧 View Image button pressed for \(dayMeal.meal.name) (ID: \(dayMeal.meal.id))")
+                            generateMealImage(for: dayMeal)
+                        } label: {
+                            HStack {
+                                if generatingImageForMealId == dayMeal.meal.id {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("Generating...")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                } else {
+                                    Image(systemName: "photo.fill")
+                                        .font(.subheadline)
+                                    Text("View Image")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.blue)
+                            )
+                        }
+                        .disabled(generatingImageForMealId == dayMeal.meal.id)
+                        .padding(.top, 12)
                     }
                 }
                 
@@ -724,42 +757,7 @@ struct MealPlanDetailView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(.systemGray6).opacity(0.5))
                 )
-                
-                // Instructions
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "list.number")
-                            .foregroundColor(.green)
-                        Text("Instructions")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                        Spacer()
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(dayMeal.meal.instructions.enumerated()), id: \.offset) { index, instruction in
-                            HStack(alignment: .top, spacing: 12) {
-                                Text("\(index + 1)")
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .frame(width: 24, height: 24)
-                                    .background(Circle().fill(Color.green))
-                                
-                                Text(instruction)
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                
-                                Spacer()
-                            }
-                        }
-                    }
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6).opacity(0.5))
-                )
+
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
@@ -964,6 +962,62 @@ struct MealPlanDetailView: View {
                     errorMessage = "Failed to generate recipe for \(dayMeal.meal.name): \(error.localizedDescription)"
                 }
                 print("❌ Error generating detailed recipe for \(dayMeal.meal.name): \(error)")
+            }
+        }
+    }
+    
+    private func generateMealImage(for dayMeal: DayMeal) {
+        Task {
+            await MainActor.run {
+                generatingImageForMealId = dayMeal.meal.id
+            }
+            
+            do {
+                print("🔄 Starting image generation for: \(dayMeal.meal.name) (ID: \(dayMeal.meal.id))")
+                
+                let imageUrl = try await openAIService.generateMealImage(for: dayMeal.meal)
+                
+                print("✅ Image generated successfully for: \(dayMeal.meal.name)")
+                
+                // Update the meal with the image URL in local state
+                await MainActor.run {
+                    if let index = dayMeals.firstIndex(where: { $0.meal.id == dayMeal.meal.id }) {
+                        let updatedMeal = Meal(
+                            id: dayMeal.meal.id, // CRITICAL: Preserve the original database ID
+                            name: dayMeal.meal.name,
+                            description: dayMeal.meal.description,
+                            calories: dayMeal.meal.calories,
+                            cookTime: dayMeal.meal.cookTime,
+                            ingredients: dayMeal.meal.ingredients,
+                            instructions: dayMeal.meal.instructions,
+                            originalCookingDay: dayMeal.meal.originalCookingDay,
+                            imageUrl: imageUrl,
+                            recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                            detailedIngredients: dayMeal.meal.detailedIngredients,
+                            detailedInstructions: dayMeal.meal.detailedInstructions,
+                            cookingTips: dayMeal.meal.cookingTips,
+                            servingInfo: dayMeal.meal.servingInfo
+                        )
+                        
+                        dayMeals[index] = DayMeal(day: dayMeal.day, meal: updatedMeal)
+                        print("✅ Local state updated for meal: \(dayMeal.meal.name)")
+                    } else {
+                        print("⚠️ Could not find meal with ID \(dayMeal.meal.id) in dayMeals array")
+                    }
+                    generatingImageForMealId = nil
+                }
+                
+                // Update the meal in the database
+                print("💾 Updating database with image URL for meal ID: \(dayMeal.meal.id)")
+                try await databaseService.updateMealImage(mealId: dayMeal.meal.id, imageUrl: imageUrl)
+                
+                print("✅ Successfully generated and saved meal image for \(dayMeal.meal.name)")
+                
+            } catch {
+                await MainActor.run {
+                    generatingImageForMealId = nil
+                }
+                print("❌ Error generating meal image for \(dayMeal.meal.name): \(error)")
             }
         }
     }

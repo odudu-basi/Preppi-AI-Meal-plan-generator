@@ -208,10 +208,14 @@ struct ProfileView: View {
                     )
                     .onTapGesture {
                         if isSelected {
+                            // Allow deselecting the current goal
                             tempUserData.healthGoals.removeAll { $0 == goal }
                         } else {
+                            // Clear all goals and select only this one (single selection)
+                            tempUserData.healthGoals.removeAll()
                             tempUserData.healthGoals.append(goal)
                         }
+                        hasUnsavedChanges = true
                     }
                 }
             }

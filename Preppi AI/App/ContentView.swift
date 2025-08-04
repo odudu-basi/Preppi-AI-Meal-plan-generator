@@ -44,13 +44,11 @@ struct PreppiLogo: View {
 
 struct ContentView: View {
     @StateObject private var appState = AppState()
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var appDidEnterBackground = false
     
     var body: some View {
         Group {
             if appState.showSplashScreen {
-                // Show splash screen on app launch/reentry
+                // Show splash screen only on initial app launch
                 SplashScreenView {
                     appState.showSplashScreen = false
                 }
@@ -103,24 +101,6 @@ struct ContentView: View {
             // Debug: Print current user info
             appState.printUserInfo()
         }
-        .onChange(of: scenePhase) { newPhase in
-            switch newPhase {
-            case .background:
-                // App went to background
-                appDidEnterBackground = true
-            case .active:
-                // App became active - show splash if it was in background
-                if appDidEnterBackground && !appState.showSplashScreen {
-                    appState.showSplashScreen = true
-                    appDidEnterBackground = false
-                }
-            case .inactive:
-                // App is inactive (transition state)
-                break
-            @unknown default:
-                break
-            }
-        }
     }
 }
 
@@ -134,7 +114,7 @@ struct MainScreenView: View {
             ZStack {
                 // Background gradient
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.green.opacity(0.1), Color.white]),
+                    gradient: Gradient(colors: [Color.black, Color.green]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -195,7 +175,7 @@ struct MainScreenView: View {
                             .frame(height: 60)
                             .background(
                                 RoundedRectangle(cornerRadius: 15)
-                                .fill(Color.white.opacity(0.7))
+                                .fill(Color.white.opacity(0.9))
                                     .stroke(Color.green, lineWidth: 2)
                                     
                             )
