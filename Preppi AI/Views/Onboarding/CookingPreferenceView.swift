@@ -46,7 +46,7 @@ struct CookingPreferenceView: View {
                             .scaleEffect(animateHeader ? 1.0 : 0.8)
                             .opacity(animateHeader ? 1.0 : 0.0)
                         
-                        Image(systemName: "chef.hat.fill")
+                        Image(systemName: "book.fill")
                             .font(.system(size: 45))
                             .foregroundStyle(
                                 LinearGradient(

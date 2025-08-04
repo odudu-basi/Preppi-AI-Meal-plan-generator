@@ -150,7 +150,7 @@ struct RecipePage: View {
                         value: isLoading
                     )
                 
-                Image(systemName: "chef.hat.fill")
+                                                    Image(systemName: "book.fill")
                     .font(.system(size: 40))
                     .foregroundColor(.green)
             }
@@ -252,11 +252,33 @@ struct RecipePage: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.primary)
             
-            Text(dayMeal.meal.description)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
+            // Show image if available, otherwise show description
+            if let imageUrl = dayMeal.meal.imageUrl, !imageUrl.isEmpty {
+                AsyncImage(url: URL(string: imageUrl)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 200)
+                        .clipped()
+                        .cornerRadius(12)
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(height: 200)
+                        .cornerRadius(12)
+                        .overlay(
+                            ProgressView()
+                                .tint(.gray)
+                        )
+                }
+                .padding(.horizontal, 4)
+            } else {
+                Text(dayMeal.meal.description)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
         }
         .padding(24)
         .background(
@@ -523,6 +545,7 @@ struct CookingTipView: View {
 
 #Preview {
     let sampleMeal = Meal(
+        id: UUID(),
         name: "Mediterranean Grilled Chicken",
         description: "Tender grilled chicken breast marinated in Mediterranean herbs and olive oil.",
         calories: 520,
@@ -538,7 +561,13 @@ struct CookingTipView: View {
             "zucchini"
         ],
         instructions: [],
-        originalCookingDay: "Monday"
+        originalCookingDay: "Monday",
+        imageUrl: nil,
+        recommendedCaloriesBeforeDinner: 1400,
+        detailedIngredients: nil,
+        detailedInstructions: nil,
+        cookingTips: nil,
+        servingInfo: nil
     )
     
     let sampleDayMeal = DayMeal(day: "Monday", meal: sampleMeal)

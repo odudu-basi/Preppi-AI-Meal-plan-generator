@@ -168,8 +168,9 @@ struct MainScreenView: View {
                             .frame(height: 60)
                             .background(
                                 RoundedRectangle(cornerRadius: 15)
+                                .fill(Color.white.opacity(0.7))
                                     .stroke(Color.green, lineWidth: 2)
-                                    .background(Color.white.opacity(0.9))
+                                    
                             )
                         }
                         .buttonStyle(PlainButtonStyle())

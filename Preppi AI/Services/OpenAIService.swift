@@ -5,6 +5,7 @@ class OpenAIService: ObservableObject {
     
     private let apiKey = ConfigurationService.shared.openAIAPIKey
     private let baseURL = "https://api.openai.com/v1/chat/completions"
+    private let imageGenerationURL = "https://api.openai.com/v1/images/generations"
     
     @Published var isGenerating = false
     @Published var errorMessage: String?
@@ -113,14 +114,24 @@ class OpenAIService: ObservableObject {
                 
                 let originalCookingDay = mealData["originalCookingDay"] as? String
                 
+                // Calculate recommended calories before dinner based on user goals
+                let recommendedCalories = CalorieCalculationService.shared.calculateRecommendedCaloriesBeforeDinner(for: userData)
+                
                 let meal = Meal(
+                    id: UUID(),
                     name: name,
                     description: description,
                     calories: calories,
                     cookTime: cookTime,
                     ingredients: ingredients,
                     instructions: [], // Will be generated later when viewing recipe details
-                    originalCookingDay: originalCookingDay
+                    originalCookingDay: originalCookingDay,
+                    imageUrl: nil, // No image initially - will be generated on demand
+                    recommendedCaloriesBeforeDinner: recommendedCalories,
+                    detailedIngredients: nil, // Will be generated when detailed recipe is requested
+                    detailedInstructions: nil,
+                    cookingTips: nil,
+                    servingInfo: nil
                 )
                 
                 let dayMeal = DayMeal(
@@ -450,6 +461,89 @@ class OpenAIService: ObservableObject {
         
         return prompt
     }
+    
+    func generateMealImage(for meal: Meal) async throws -> String {
+        // Note: Not setting global isGenerating to avoid full-page loading view
+        // Individual views should manage their own loading states
+        
+        await MainActor.run {
+            errorMessage = nil
+        }
+        
+        let prompt = createImagePrompt(for: meal)
+        
+        let requestBody: [String: Any] = [
+            "model": "dall-e-3",
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+            "quality": "standard",
+            "style": "natural"
+        ]
+        
+        guard let url = URL(string: imageGenerationURL) else {
+            throw OpenAIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+        
+        do {
+            let imageResponse = try JSONDecoder().decode(ImageGenerationResponse.self, from: data)
+            guard let imageUrl = imageResponse.data.first?.url else {
+                throw OpenAIError.parsingError
+            }
+            return imageUrl
+        } catch {
+            throw OpenAIError.parsingError
+        }
+    }
+    
+    private func createImagePrompt(for meal: Meal) -> String {
+        return """
+        Create a high-quality, appetizing food photography image of "\(meal.name)". 
+        
+        Description: \(meal.description)
+        
+        The image should show:
+        - Professional food photography style
+        - Beautiful plating and presentation
+        - Natural lighting
+        - Restaurant-quality appearance
+        - Fresh, vibrant colors
+        - Appetizing and mouth-watering
+        - Clean, minimalist background
+        - High detail and clarity
+        
+        Style: Professional food photography, clean and modern, studio lighting, top-down or 45-degree angle view.
+        """
+    }
 }
 
 // MARK: - Data Models
@@ -470,6 +564,14 @@ struct DetailedRecipe: Codable {
     let instructions: [String]
     let cookingTips: [String]
     let servingInfo: String
+}
+
+struct ImageGenerationResponse: Codable {
+    let data: [ImageData]
+}
+
+struct ImageData: Codable {
+    let url: String
 }
 
 // MARK: - Error Handling

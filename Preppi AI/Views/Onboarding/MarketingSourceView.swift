@@ -65,7 +65,6 @@ struct MarketingSourceView: View {
                                 )
                             )
                             .multilineTextAlignment(.center)
-                            .lineLimit(2)
                             .minimumScaleFactor(0.8)
                             .padding(.horizontal, 20)
                             .opacity(animateHeader ? 1.0 : 0.0)
@@ -75,7 +74,6 @@ struct MarketingSourceView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                            .lineLimit(3)
                             .padding(.horizontal, 20)
                             .opacity(animateHeader ? 1.0 : 0.0)
                             .offset(y: animateHeader ? 0 : 20)
@@ -166,7 +164,7 @@ struct PremiumMarketingSourceCard: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
                 Spacer()

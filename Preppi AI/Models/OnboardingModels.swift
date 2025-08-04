@@ -51,7 +51,7 @@ enum CookingPreference: String, CaseIterable, Identifiable, Codable {
     
     var icon: String {
         switch self {
-        case .loveCooking: return "chef.hat.fill"
+        case .loveCooking: return "book.fill"
         case .enjoysCooking: return "heart.fill"
         case .basicCooking: return "fork.knife"
         case .preferNotToCook: return "takeoutbag.and.cup.and.straw"

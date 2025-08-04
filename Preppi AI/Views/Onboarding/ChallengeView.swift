@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import StoreKit
 
 struct ChallengeView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
     @State private var animateHeader = false
     @State private var animateContent = false
+    @State private var isRequestingReview = false
     
     var body: some View {
         OnboardingContainer {
@@ -102,7 +104,7 @@ struct ChallengeView: View {
                     isEnabled: !coordinator.userData.challenges.isEmpty,
                     animateContent: animateContent
                 ) {
-                    coordinator.nextStep()
+                    requestReviewAndContinue()
                 }
                 .padding(.horizontal, 20)
             }
@@ -125,6 +127,22 @@ struct ChallengeView: View {
             } else {
                 coordinator.userData.challenges.insert(challenge)
             }
+        }
+    }
+    
+    private func requestReviewAndContinue() {
+        // Set flag to indicate we're requesting review
+        isRequestingReview = true
+        
+        // Request Apple review
+        if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            SKStoreReviewController.requestReview(in: scene)
+        }
+        
+        // Small delay to allow review prompt to appear, then navigate
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isRequestingReview = false
+            coordinator.nextStep()
         }
     }
 }

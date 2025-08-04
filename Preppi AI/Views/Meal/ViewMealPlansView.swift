@@ -193,14 +193,10 @@ struct ViewMealPlansView: View {
 // MARK: - Meal Plan Card View
 struct MealPlanCardView: View {
     let mealPlan: DatabaseMealPlan
-    let onDelete: () -> Void
-    
-    @State private var showingDetails = false
+        let onDelete: () -> Void
     
     var body: some View {
-        Button {
-            showingDetails = true
-        } label: {
+        NavigationLink(destination: MealPlanDetailView(mealPlan: mealPlan)) {
             HStack(spacing: 16) {
                 // Icon
                 ZStack {
@@ -273,9 +269,6 @@ struct MealPlanCardView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
-        .sheet(isPresented: $showingDetails) {
-            MealPlanDetailView(mealPlan: mealPlan)
-        }
     }
     
     private func formatDate(_ dateString: String) -> String {
@@ -302,6 +295,9 @@ struct MealPlanDetailView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var selectedDayIndex = 0
+    @State private var generatingRecipeForMealId: UUID? = nil
+    @EnvironmentObject var appState: AppState
+    @StateObject private var openAIService = OpenAIService.shared
     
     private let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     private let weekdayIcons = ["🌟", "⚡", "🔥", "💪", "🎯", "🌈", "✨"]
@@ -332,17 +328,18 @@ struct MealPlanDetailView: View {
             }
             .navigationTitle(mealPlan.name)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.green)
-                }
-            }
         }
         .onAppear {
             loadMealPlanDetails()
+        }
+        .alert("Recipe Generation Error", isPresented: .constant(errorMessage != nil)) {
+            Button("OK") {
+                errorMessage = nil
+            }
+        } message: {
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+            }
         }
     }
     
@@ -487,32 +484,196 @@ struct MealPlanDetailView: View {
         return ScrollView {
             VStack(spacing: 20) {
                 // Meal header
-                VStack(spacing: 8) {
+                VStack(spacing: 16) {
                     Text(dayMeal.meal.name)
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                     
-                    Text(dayMeal.meal.description)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                    
-                    HStack(spacing: 20) {
-                        Label("\(dayMeal.meal.calories) cal", systemImage: "flame.fill")
+                    // Show image if available, otherwise show description
+                    if let imageUrl = dayMeal.meal.imageUrl, !imageUrl.isEmpty {
+                        AsyncImage(url: URL(string: imageUrl)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 200)
+                                .clipped()
+                                .cornerRadius(12)
+                        } placeholder: {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 200)
+                                .cornerRadius(12)
+                                .overlay(
+                                    ProgressView()
+                                        .tint(.gray)
+                                )
+                        }
+                    } else {
+                        Text(dayMeal.meal.description)
                             .font(.subheadline)
-                            .foregroundColor(.orange)
-                        
-                        Label("\(dayMeal.meal.cookTime) min", systemImage: "clock.fill")
-                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                
+                // Daily Calories Section
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "target")
+                            .font(.title3)
                             .foregroundColor(.blue)
                         
-                        if let originalDay = dayMeal.meal.originalCookingDay {
-                            Label("From \(originalDay)", systemImage: "arrow.clockwise")
+                        Text("Daily Nutrition Goal")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                    }
+                    
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recommended calories before dinner")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 4) {
+                                Text("\(dayMeal.meal.recommendedCaloriesBeforeDinner)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.blue)
+                                
+                                Text("calories")
+                                    .font(.subheadline)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Dinner calories")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 4) {
+                                Text("\(dayMeal.meal.calories)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.orange)
+                                
+                                Text("calories")
+                                    .font(.subheadline)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                    }
+                    
+                    // Total daily calories
+                    HStack {
+                        Text("Total Daily Target:")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 4) {
+                            Text("\(dayMeal.meal.recommendedCaloriesBeforeDinner + dayMeal.meal.calories)")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                            
+                            Text("calories")
                                 .font(.subheadline)
                                 .foregroundColor(.green)
                         }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.blue.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                        )
+                )
+                
+                // Basic stats
+                HStack(spacing: 20) {
+                    Label("\(dayMeal.meal.cookTime) min", systemImage: "clock.fill")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                    
+                    if let originalDay = dayMeal.meal.originalCookingDay {
+                        Label("From \(originalDay)", systemImage: "arrow.clockwise")
+                            .font(.subheadline)
+                            .foregroundColor(.green)
+                    }
+                    
+                    Spacer()
+                }
+                
+                // View Recipes Button
+                VStack(spacing: 12) {
+                    let hasRecipe = hasDetailedRecipe(dayMeal.meal)
+                    let _ = print("🔧 Button decision for \(dayMeal.meal.name) (ID: \(dayMeal.meal.id)): hasRecipe = \(hasRecipe), generating = \(generatingRecipeForMealId == dayMeal.meal.id)")
+                    
+                    if hasRecipe {
+                        NavigationLink(destination: MealDetailedRecipeView(dayMeal: dayMeal)) {
+                            HStack {
+                                Image(systemName: "book.fill")
+                                Text("View Recipes")
+                            }
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                LinearGradient(
+                                    colors: [.green, .mint],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                    } else {
+                        Button {
+                            generateDetailedRecipe(for: dayMeal)
+                        } label: {
+                            HStack {
+                                if generatingRecipeForMealId == dayMeal.meal.id {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("Generating...")
+                                } else {
+                                    Image(systemName: "fork.knife")
+                                    Text("View Recipes")
+                                }
+                            }
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                LinearGradient(
+                                    colors: [.green, .mint],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .disabled(generatingRecipeForMealId == dayMeal.meal.id)
                     }
                 }
                 
@@ -602,11 +763,49 @@ struct MealPlanDetailView: View {
             }
             
             do {
+                print("🔄 Loading meal plan details for ID: \(mealPlanId)")
                 if let fullMealPlan = try await databaseService.getMealPlanDetails(mealPlanId: mealPlanId) {
                     await MainActor.run {
                         dayMeals = fullMealPlan.dayMeals.sorted { $0.dayIndex < $1.dayIndex }
                         isLoading = false
                         selectedDayIndex = 0
+                        
+                        // Debug: Print recipe data for each meal and check for duplicates
+                        print("🔍 Loaded \(dayMeals.count) meals:")
+                        
+                        // Check for duplicate meal names
+                        let mealNames = dayMeals.map { $0.meal.name }
+                        let uniqueNames = Set(mealNames)
+                        if mealNames.count != uniqueNames.count {
+                            print("⚠️ WARNING: Found duplicate meal names!")
+                        }
+                        
+                        for (index, dayMeal) in dayMeals.enumerated() {
+                            print("📋 [\(index)] \(dayMeal.meal.name) (ID: \(dayMeal.meal.id))")
+                            print("   - detailedIngredients: \(dayMeal.meal.detailedIngredients?.count ?? 0) items")
+                            print("   - detailedInstructions: \(dayMeal.meal.detailedInstructions?.count ?? 0) items")
+                            print("   - cookingTips: \(dayMeal.meal.cookingTips?.count ?? 0) items")
+                            print("   - servingInfo: \(dayMeal.meal.servingInfo != nil ? "exists" : "nil")")
+                            
+                            // Check if this meal should have a recipe vs what we loaded
+                            let shouldHaveRecipe = hasDetailedRecipe(dayMeal.meal)
+                            print("   - hasRecipe calculated: \(shouldHaveRecipe)")
+                            
+                            if !shouldHaveRecipe && (dayMeal.meal.detailedIngredients?.count ?? 0) > 0 {
+                                print("   ⚠️ ISSUE: Raw data shows \(dayMeal.meal.detailedIngredients?.count ?? 0) ingredients but hasDetailedRecipe returns false!")
+                                print("   - Raw ingredients: \(dayMeal.meal.detailedIngredients ?? [])")
+                                print("   - Raw instructions: \(dayMeal.meal.detailedInstructions ?? [])")
+                            }
+                            
+                            // Check for duplicate names with different IDs
+                            let duplicates = dayMeals.enumerated().filter { $0.element.meal.name == dayMeal.meal.name && $0.offset != index }
+                            if !duplicates.isEmpty {
+                                print("   🚨 DUPLICATE NAME FOUND: This meal name appears at indices: \(duplicates.map { $0.offset })")
+                                for dup in duplicates {
+                                    print("      Duplicate at [\(dup.offset)]: ID \(dup.element.meal.id)")
+                                }
+                            }
+                        }
                     }
                 } else {
                     await MainActor.run {
@@ -634,6 +833,122 @@ struct MealPlanDetailView: View {
             return displayFormatter.string(from: date)
         }
         return dateString
+    }
+    
+    private func hasDetailedRecipe(_ meal: Meal) -> Bool {
+        // Check if we have the essential detailed recipe components
+        let hasIngredients = meal.detailedIngredients != nil && !meal.detailedIngredients!.isEmpty
+        let hasInstructions = meal.detailedInstructions != nil && !meal.detailedInstructions!.isEmpty
+        let hasTips = meal.cookingTips != nil && !meal.cookingTips!.isEmpty
+        let hasServingInfo = meal.servingInfo != nil && !meal.servingInfo!.isEmpty
+        
+        let hasRecipe = hasIngredients && hasInstructions
+        
+        print("🔍 Checking recipe for \(meal.name) (ID: \(meal.id)):")
+        print("   - detailedIngredients: \(meal.detailedIngredients?.count ?? 0) items (hasIngredients: \(hasIngredients))")
+        print("   - detailedInstructions: \(meal.detailedInstructions?.count ?? 0) items (hasInstructions: \(hasInstructions))") 
+        print("   - cookingTips: \(meal.cookingTips?.count ?? 0) items (hasTips: \(hasTips))")
+        print("   - servingInfo: \(meal.servingInfo != nil ? "exists" : "nil") (hasServingInfo: \(hasServingInfo))")
+        print("   - hasRecipe (ingredients + instructions): \(hasRecipe)")
+        print("   - Currently generating for meal ID: \(generatingRecipeForMealId?.uuidString ?? "none")")
+        
+        // Note: Meal IDs now properly match database IDs, so recipes should persist correctly
+        
+        return hasRecipe
+    }
+    
+    private func generateDetailedRecipe(for dayMeal: DayMeal) {
+        Task {
+            await MainActor.run {
+                generatingRecipeForMealId = dayMeal.meal.id
+                print("🔄 Starting recipe generation for: \(dayMeal.meal.name) (ID: \(dayMeal.meal.id))")
+            }
+            
+            do {
+                let detailedRecipe = try await openAIService.generateDetailedRecipe(
+                    for: dayMeal,
+                    userData: appState.userData
+                )
+                
+                print("✅ Recipe generated successfully")
+                print("📝 Ingredients: \(detailedRecipe.detailedIngredients.count)")
+                print("📝 Instructions: \(detailedRecipe.instructions.count)")
+                
+                // Check if recipe columns exist before updating
+                print("🔍 Checking if recipe columns exist in database...")
+                let columnsExist = try await databaseService.checkRecipeColumnsExist()
+                
+                if !columnsExist {
+                    throw NSError(domain: "RecipeError", code: 1, userInfo: [
+                        NSLocalizedDescriptionKey: "Recipe columns not found in database. Please run the migration in Supabase first."
+                    ])
+                }
+                
+                // Update the meal in the database
+                print("💾 Updating database for meal ID: \(dayMeal.meal.id)")
+                try await databaseService.updateMealDetailedRecipe(
+                    mealId: dayMeal.meal.id, 
+                    detailedRecipe: detailedRecipe
+                )
+                print("✅ Database updated successfully")
+                
+                // Update local state for this specific meal
+                await MainActor.run {
+                    print("🔍 Looking for meal ID \(dayMeal.meal.id) in dayMeals array...")
+                    for (i, dm) in dayMeals.enumerated() {
+                        print("   [\(i)] \(dm.meal.name) - ID: \(dm.meal.id)")
+                    }
+                    
+                    if let index = dayMeals.firstIndex(where: { $0.meal.id == dayMeal.meal.id }) {
+                        print("✅ Found meal at index \(index)")
+                        let updatedMeal = Meal(
+                            id: dayMeal.meal.id, // CRITICAL: Preserve the original database ID
+                            name: dayMeal.meal.name,
+                            description: dayMeal.meal.description,
+                            calories: dayMeal.meal.calories,
+                            cookTime: dayMeal.meal.cookTime,
+                            ingredients: dayMeal.meal.ingredients,
+                            instructions: dayMeal.meal.instructions,
+                            originalCookingDay: dayMeal.meal.originalCookingDay,
+                            imageUrl: dayMeal.meal.imageUrl,
+                            recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                            detailedIngredients: detailedRecipe.detailedIngredients,
+                            detailedInstructions: detailedRecipe.instructions,
+                            cookingTips: detailedRecipe.cookingTips,
+                            servingInfo: detailedRecipe.servingInfo
+                        )
+                        
+                        dayMeals[index] = DayMeal(day: dayMeal.day, meal: updatedMeal)
+                        print("✅ Local state updated for meal: \(dayMeal.meal.name)")
+                    } else {
+                        print("❌ Could not find meal with ID \(dayMeal.meal.id) in dayMeals array")
+                        print("❌ This means we're trying to update a meal that doesn't exist in our current data!")
+                        print("❌ Possible causes:")
+                        print("   1. Duplicate meals with different IDs")
+                        print("   2. Meal IDs changing between loads")
+                        print("   3. Stale meal reference")
+                    }
+                    generatingRecipeForMealId = nil
+                }
+                
+                print("✅ Successfully generated and saved detailed recipe for \(dayMeal.meal.name)")
+                
+                // Verify the button state should change after successful generation
+                await MainActor.run {
+                    if let updatedMeal = dayMeals.first(where: { $0.meal.id == dayMeal.meal.id })?.meal {
+                        let nowHasRecipe = hasDetailedRecipe(updatedMeal)
+                        print("🔄 After generation - Button should now show: \(nowHasRecipe ? "book icon (View)" : "fork icon (Generate)")")
+                    }
+                }
+                
+            } catch {
+                await MainActor.run {
+                    generatingRecipeForMealId = nil
+                    errorMessage = "Failed to generate recipe for \(dayMeal.meal.name): \(error.localizedDescription)"
+                }
+                print("❌ Error generating detailed recipe for \(dayMeal.meal.name): \(error)")
+            }
+        }
     }
 }
 

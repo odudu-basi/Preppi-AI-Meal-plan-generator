@@ -37,6 +37,12 @@ struct DatabaseMeal: Codable {
     let calories: Int
     let cookTime: Int
     let originalCookingDay: String?
+    let imageUrl: String?
+    let recommendedCaloriesBeforeDinner: Int
+    let detailedIngredients: [String]?
+    let detailedInstructions: [String]?
+    let cookingTips: [String]?
+    let servingInfo: String?
     let createdAt: String?
     let updatedAt: String?
     
@@ -47,6 +53,12 @@ struct DatabaseMeal: Codable {
         case calories
         case cookTime = "cook_time"
         case originalCookingDay = "original_cooking_day"
+        case imageUrl = "image_url"
+        case recommendedCaloriesBeforeDinner = "recommended_calories_before_dinner"
+        case detailedIngredients = "detailed_ingredients"
+        case detailedInstructions = "detailed_instructions"
+        case cookingTips = "cooking_tips"
+        case servingInfo = "serving_info"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -241,6 +253,128 @@ class MealPlanDatabaseService {
             .value
     }
     
+    /// Update a meal's image URL
+    func updateMealImage(mealId: UUID, imageUrl: String) async throws {
+        let update = ["image_url": imageUrl]
+        
+        let _: DatabaseMeal = try await supabase.database
+            .from("meals")
+            .update(update)
+            .eq("id", value: mealId.uuidString)
+            .single()
+            .execute()
+            .value
+        
+        print("✅ Successfully updated meal image URL for meal ID: \(mealId)")
+    }
+    
+    /// Debug: Check what recipe data actually exists for a specific meal ID
+    func debugMealRecipeData(mealId: UUID) async {
+        do {
+            print("🔍 DEBUG: Checking database for meal ID: \(mealId)")
+            
+            let response = try await supabase.database
+                .from("meals")
+                .select("id, name, detailed_ingredients, detailed_instructions, cooking_tips, serving_info")
+                .eq("id", value: mealId.uuidString)
+                .execute()
+            
+            if let jsonObj = try? JSONSerialization.jsonObject(with: response.data) as? [[String: Any]],
+               let meal = jsonObj.first {
+                
+                print("🔍 Database contains:")
+                print("   - Name: \(meal["name"] as? String ?? "unknown")")
+                print("   - detailed_ingredients: \((meal["detailed_ingredients"] as? [Any])?.count ?? 0) items")
+                print("   - detailed_instructions: \((meal["detailed_instructions"] as? [Any])?.count ?? 0) items")
+                print("   - cooking_tips: \((meal["cooking_tips"] as? [Any])?.count ?? 0) items")
+                print("   - serving_info: \(meal["serving_info"] != nil ? "exists" : "null")")
+                
+                if let ingredients = meal["detailed_ingredients"] as? [String], !ingredients.isEmpty {
+                    print("   - First ingredient: \(ingredients.first ?? "none")")
+                }
+                if let instructions = meal["detailed_instructions"] as? [String], !instructions.isEmpty {
+                    print("   - First instruction: \(instructions.first ?? "none")")
+                }
+            } else {
+                print("❌ No meal found with ID: \(mealId)")
+            }
+        } catch {
+            print("❌ Debug query failed: \(error)")
+        }
+    }
+    
+    /// Check if the recipe columns exist in the database
+    func checkRecipeColumnsExist() async throws -> Bool {
+        do {
+            // Simple query to test if the recipe columns exist without decoding to DatabaseMeal
+            let response = try await supabase.database
+                .from("meals")
+                .select("detailed_ingredients, detailed_instructions, cooking_tips, serving_info")
+                .limit(1)
+                .execute()
+            
+            print("✅ Recipe columns exist in database")
+            return true
+        } catch {
+            print("❌ Recipe columns missing or migration not applied: \(error)")
+            return false
+        }
+    }
+    
+    /// Update a meal's detailed recipe
+    func updateMealDetailedRecipe(mealId: UUID, detailedRecipe: DetailedRecipe) async throws {
+        print("🔄 Updating detailed recipe for meal ID: \(mealId)")
+        print("   - Ingredients: \(detailedRecipe.detailedIngredients.count) items")
+        print("   - Instructions: \(detailedRecipe.instructions.count) items")
+        print("   - Tips: \(detailedRecipe.cookingTips.count) items")
+        print("   - Serving info: \(detailedRecipe.servingInfo.isEmpty ? "empty" : "provided")")
+        
+        // Create a partial DatabaseMeal for update with only the recipe fields
+        struct MealRecipeUpdate: Codable {
+            let detailedIngredients: [String]
+            let detailedInstructions: [String]
+            let cookingTips: [String]
+            let servingInfo: String
+            
+            enum CodingKeys: String, CodingKey {
+                case detailedIngredients = "detailed_ingredients"
+                case detailedInstructions = "detailed_instructions"
+                case cookingTips = "cooking_tips"
+                case servingInfo = "serving_info"
+            }
+        }
+        
+        let update = MealRecipeUpdate(
+            detailedIngredients: detailedRecipe.detailedIngredients,
+            detailedInstructions: detailedRecipe.instructions,
+            cookingTips: detailedRecipe.cookingTips,
+            servingInfo: detailedRecipe.servingInfo
+        )
+        
+        // Execute the update
+        do {
+            try await supabase.database
+                .from("meals")
+                .update(update)
+                .eq("id", value: mealId.uuidString)
+                .execute()
+            
+            print("✅ Successfully updated meal detailed recipe for meal ID: \(mealId)")
+            
+        } catch {
+            print("❌ Database update failed: \(error)")
+            print("   - Error description: \(error.localizedDescription)")
+            
+            // Try to extract more details from the error
+            if let errorData = (error as NSError).userInfo["data"] as? Data,
+               let errorString = String(data: errorData, encoding: .utf8) {
+                print("   - Raw error data: \(errorString)")
+            }
+            
+            throw error
+        }
+    }
+    
     // MARK: - Private Helper Methods
     
     private func saveMealsForMealPlan(dayMeals: [DayMeal], mealPlanId: UUID) async throws {
@@ -253,6 +387,12 @@ class MealPlanDatabaseService {
                 calories: dayMeal.meal.calories,
                 cookTime: dayMeal.meal.cookTime,
                 originalCookingDay: dayMeal.meal.originalCookingDay,
+                imageUrl: dayMeal.meal.imageUrl,
+                recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                detailedIngredients: dayMeal.meal.detailedIngredients,
+                detailedInstructions: dayMeal.meal.detailedInstructions,
+                cookingTips: dayMeal.meal.cookingTips,
+                servingInfo: dayMeal.meal.servingInfo,
                 createdAt: nil,
                 updatedAt: nil
             )
@@ -383,47 +523,62 @@ class MealPlanDatabaseService {
         
         for dayMealRecord in dayMealRecords {
             // Get the meal details
-            let meal: DatabaseMeal = try await supabase.database
-                .from("meals")
-                .select()
-                .eq("id", value: dayMealRecord.mealId.uuidString)
-                .single()
-                .execute()
-                .value
-            
-            // Get ingredients
-            let ingredients: [DatabaseMealIngredient] = try await supabase.database
-                .from("meal_ingredients")
-                .select()
-                .eq("meal_id", value: dayMealRecord.mealId.uuidString)
-                .order("ingredient_order", ascending: true)
-                .execute()
-                .value
-            
-            // Get instructions
-            let instructions: [DatabaseMealInstruction] = try await supabase.database
-                .from("meal_instructions")
-                .select()
-                .eq("meal_id", value: dayMealRecord.mealId.uuidString)
-                .order("step_order", ascending: true)
-                .execute()
-                .value
-            
-            // Convert to app models
-            let appMeal = Meal(
-                name: meal.name,
-                description: meal.description,
-                calories: meal.calories,
-                cookTime: meal.cookTime,
-                ingredients: ingredients.map { $0.ingredient },
-                instructions: instructions.map { $0.instruction },
-                originalCookingDay: meal.originalCookingDay
-            )
-            
-            let dayMeal = DayMeal(day: dayMealRecord.dayName, meal: appMeal)
-            dayMeals.append(dayMeal)
+            do {
+                let meal: DatabaseMeal = try await supabase.database
+                    .from("meals")
+                    .select()
+                    .eq("id", value: dayMealRecord.mealId.uuidString)
+                    .single()
+                    .execute()
+                    .value
+                
+                // Get ingredients
+                let ingredients: [DatabaseMealIngredient] = try await supabase.database
+                    .from("meal_ingredients")
+                    .select()
+                    .eq("meal_id", value: dayMealRecord.mealId.uuidString)
+                    .order("ingredient_order", ascending: true)
+                    .execute()
+                    .value
+                
+                // Get instructions
+                let instructions: [DatabaseMealInstruction] = try await supabase.database
+                    .from("meal_instructions")
+                    .select()
+                    .eq("meal_id", value: dayMealRecord.mealId.uuidString)
+                    .order("step_order", ascending: true)
+                    .execute()
+                    .value
+                
+                // CRITICAL: Use the database meal ID, not generate a new UUID
+                let actualMealId = meal.id ?? dayMealRecord.mealId
+                
+                // Convert to app models
+                let appMeal = Meal(
+                    id: actualMealId,  // Use actual database ID
+                    name: meal.name,
+                    description: meal.description,
+                    calories: meal.calories,
+                    cookTime: meal.cookTime,
+                    ingredients: ingredients.map { $0.ingredient },
+                    instructions: instructions.map { $0.instruction },
+                    originalCookingDay: meal.originalCookingDay,
+                    imageUrl: meal.imageUrl,
+                    recommendedCaloriesBeforeDinner: meal.recommendedCaloriesBeforeDinner,
+                    detailedIngredients: meal.detailedIngredients,
+                    detailedInstructions: meal.detailedInstructions,
+                    cookingTips: meal.cookingTips,
+                    servingInfo: meal.servingInfo
+                )
+                
+                let dayMeal = DayMeal(day: dayMealRecord.dayName, meal: appMeal)
+                dayMeals.append(dayMeal)
+                
+            } catch {
+                print("❌ Failed to load meal with ID \(dayMealRecord.mealId): \(error)")
+                // Continue with next meal instead of failing completely
+            }
         }
-        
         return dayMeals
     }
     
