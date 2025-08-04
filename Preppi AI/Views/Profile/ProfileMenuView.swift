@@ -5,6 +5,7 @@ struct ProfileMenuView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var showingProfileEdit = false
+    @State private var showingFeatureRequest = false
     
     var body: some View {
         NavigationView {
@@ -48,6 +49,9 @@ struct ProfileMenuView: View {
         .sheet(isPresented: $showingProfileEdit) {
             ProfileView(userData: appState.userData)
                 .environmentObject(appState)
+        }
+        .sheet(isPresented: $showingFeatureRequest) {
+            FeatureRequestView()
         }
     }
     
@@ -134,6 +138,17 @@ struct ProfileMenuView: View {
                 if let url = URL(string: "https://docs.google.com/document/d/1Lm3uLZpbWNJjx1o6I_W6dLgAWMCEaztal7y0fH5zNAU/edit?tab=t.0#heading=h.14nmj5ie8cll") {
                     openURL(url)
                 }
+            }
+            
+            // Feature Requests - Clickable
+            MenuOptionRow(
+                icon: "lightbulb.fill",
+                title: "Feature Requests",
+                subtitle: "Share your ideas and feedback",
+                iconColor: .purple,
+                isClickable: true
+            ) {
+                showingFeatureRequest = true
             }
         }
     }
