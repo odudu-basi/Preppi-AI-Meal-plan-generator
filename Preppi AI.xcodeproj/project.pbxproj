@@ -6,6 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F03CA1702E39A31B002E41C9 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA16F2E39A31B002E41C9 /* Auth */; };
+		F03CA1722E39A31B002E41C9 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1712E39A31B002E41C9 /* Functions */; };
+		F03CA1742E39A31B002E41C9 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1732E39A31B002E41C9 /* PostgREST */; };
+		F03CA1762E39A31B002E41C9 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1752E39A31B002E41C9 /* Realtime */; };
+		F03CA1782E39A31B002E41C9 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1772E39A31B002E41C9 /* Storage */; };
+		F03CA17D2E39A48E002E41C9 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA17C2E39A48E002E41C9 /* GoogleSignIn */; };
+		F03CA17F2E39A48E002E41C9 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA17E2E39A48E002E41C9 /* GoogleSignInSwift */; };
+		F0618F5F2E3E536500FBEB00 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F0618F5E2E3E536500FBEB00 /* Supabase */; };
+		F0F0E6C02E3710510035BB38 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F0F0E6BF2E3710510035BB38 /* RevenueCat */; };
+		F0F0E6C22E3710510035BB38 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = F0F0E6C12E3710510035BB38 /* RevenueCatUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		F06E8EE92E33520F004256EE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +65,16 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F0618F5F2E3E536500FBEB00 /* Supabase in Frameworks */,
+				F03CA17F2E39A48E002E41C9 /* GoogleSignInSwift in Frameworks */,
+				F0F0E6C22E3710510035BB38 /* RevenueCatUI in Frameworks */,
+				F03CA17D2E39A48E002E41C9 /* GoogleSignIn in Frameworks */,
+				F0F0E6C02E3710510035BB38 /* RevenueCat in Frameworks */,
+				F03CA1782E39A31B002E41C9 /* Storage in Frameworks */,
+				F03CA1722E39A31B002E41C9 /* Functions in Frameworks */,
+				F03CA1762E39A31B002E41C9 /* Realtime in Frameworks */,
+				F03CA1702E39A31B002E41C9 /* Auth in Frameworks */,
+				F03CA1742E39A31B002E41C9 /* PostgREST in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,12 +95,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F03CA16D2E39A1D9002E41C9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		F06E8ECF2E33520D004256EE = {
 			isa = PBXGroup;
 			children = (
 				F06E8EDA2E33520D004256EE /* Preppi AI */,
 				F06E8EEB2E33520F004256EE /* Preppi AITests */,
 				F06E8EF52E33520F004256EE /* Preppi AIUITests */,
+				F03CA16D2E39A1D9002E41C9 /* Frameworks */,
 				F06E8ED92E33520D004256EE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -112,6 +143,16 @@
 			);
 			name = "Preppi AI";
 			packageProductDependencies = (
+				F0F0E6BF2E3710510035BB38 /* RevenueCat */,
+				F0F0E6C12E3710510035BB38 /* RevenueCatUI */,
+				F03CA16F2E39A31B002E41C9 /* Auth */,
+				F03CA1712E39A31B002E41C9 /* Functions */,
+				F03CA1732E39A31B002E41C9 /* PostgREST */,
+				F03CA1752E39A31B002E41C9 /* Realtime */,
+				F03CA1772E39A31B002E41C9 /* Storage */,
+				F03CA17C2E39A48E002E41C9 /* GoogleSignIn */,
+				F03CA17E2E39A48E002E41C9 /* GoogleSignInSwift */,
+				F0618F5E2E3E536500FBEB00 /* Supabase */,
 			);
 			productName = "Preppi AI";
 			productReference = F06E8ED82E33520D004256EE /* Preppi AI.app */;
@@ -195,6 +236,11 @@
 			);
 			mainGroup = F06E8ECF2E33520D004256EE;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F0F0E6BE2E3710500035BB38 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
+				F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				F03CA17B2E39A48E002E41C9 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F06E8ED92E33520D004256EE /* Products */;
 			projectDirPath = "";
@@ -394,7 +440,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"Preppi AI/Preview Content\"";
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				ENABLE_PREVIEWS = YES;
@@ -408,7 +454,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -423,7 +469,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"Preppi AI/Preview Content\"";
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				ENABLE_PREVIEWS = YES;
@@ -437,7 +483,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -451,11 +497,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -470,11 +516,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -488,10 +534,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -505,10 +551,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -558,6 +604,86 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.30.2;
+			};
+		};
+		F03CA17B2E39A48E002E41C9 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+		F0F0E6BE2E3710500035BB38 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F03CA16F2E39A31B002E41C9 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		F03CA1712E39A31B002E41C9 /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		F03CA1732E39A31B002E41C9 /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		F03CA1752E39A31B002E41C9 /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		F03CA1772E39A31B002E41C9 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		F03CA17C2E39A48E002E41C9 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA17B2E39A48E002E41C9 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		F03CA17E2E39A48E002E41C9 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA17B2E39A48E002E41C9 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+		F0618F5E2E3E536500FBEB00 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		F0F0E6BF2E3710510035BB38 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F0F0E6BE2E3710500035BB38 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
+		};
+		F0F0E6C12E3710510035BB38 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F0F0E6BE2E3710500035BB38 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCatUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F06E8ED02E33520D004256EE /* Project object */;
 }
