@@ -25,7 +25,7 @@ struct PhysicalStatsView: View {
             LinearGradient(
                 gradient: Gradient(colors: [
                     Color.green.opacity(0.15),
-                    Color.white,
+                    Color(.systemBackground),
                     Color.green.opacity(0.05)
                 ]),
                 startPoint: .topLeading,
@@ -258,7 +258,7 @@ struct PremiumScrollablePicker: View {
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white)
+                        .fill(Color(.systemBackground))
                         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
@@ -473,7 +473,7 @@ struct PremiumActivityCard: View {
                             endPoint: .trailing
                         ) :
                         LinearGradient(
-                            gradient: Gradient(colors: [Color.white, Color.white]),
+                            gradient: Gradient(colors: [Color(.systemBackground), Color(.systemBackground)]),
                             startPoint: .leading,
                             endPoint: .trailing
                         )

@@ -73,6 +73,16 @@ struct DietaryRestrictionsView: View {
                             .padding(.horizontal, 20)
                             .opacity(animateHeader ? 1.0 : 0.0)
                             .offset(y: animateHeader ? 0 : 20)
+                        
+                        // Skip guidance text
+                        Text("Don't have any dietary restrictions? You can continue to the next step.")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(.green)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                            .opacity(animateHeader ? 1.0 : 0.0)
+                            .offset(y: animateHeader ? 0 : 20)
                     }
                 }
                 .padding(.vertical, 10)
@@ -85,13 +95,11 @@ struct DietaryRestrictionsView: View {
                         icon: "leaf.fill",
                         iconColor: .green
                     ) {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 15) {
+                        VStack(spacing: 12) {
                             ForEach(DietaryRestriction.allCases, id: \.self) { restriction in
-                                PremiumCheckboxRow(
+                                ImprovedCheckboxRow(
                                     title: restriction.rawValue,
+                                    emoji: restriction.emoji,
                                     isChecked: coordinator.userData.dietaryRestrictions.contains(restriction)
                                 ) {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -112,13 +120,11 @@ struct DietaryRestrictionsView: View {
                         icon: "exclamationmark.shield.fill",
                         iconColor: .orange
                     ) {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 15) {
+                        VStack(spacing: 12) {
                             ForEach(Allergy.allCases, id: \.self) { allergy in
-                                PremiumCheckboxRow(
+                                ImprovedCheckboxRow(
                                     title: allergy.rawValue,
+                                    emoji: allergy.emoji,
                                     isChecked: coordinator.userData.foodAllergies.contains(allergy)
                                 ) {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -211,6 +217,98 @@ struct PremiumSection<Content: View>: View {
     }
 }
 
+struct ImprovedCheckboxRow: View {
+    let title: String
+    let emoji: String
+    let isChecked: Bool
+    let action: () -> Void
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                // Emoji circle
+                ZStack {
+                    Circle()
+                        .fill(isChecked ? 
+                              LinearGradient(colors: [.green.opacity(0.2), .mint.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                              LinearGradient(colors: [Color(.systemGray6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .frame(width: 50, height: 50)
+                        .overlay(
+                            Circle()
+                                .stroke(isChecked ? Color.green.opacity(0.4) : Color.clear, lineWidth: 2)
+                        )
+                    
+                    Text(emoji)
+                        .font(.system(size: 24))
+                        .scaleEffect(isPressed ? 1.1 : 1.0)
+                }
+                
+                // Title and checkbox
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                    }
+                    
+                    Spacer()
+                    
+                    // Checkbox
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isChecked ? 
+                                  LinearGradient(colors: [.green, .mint], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                                  LinearGradient(colors: [Color(.systemGray5)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(isChecked ? Color.clear : Color(.systemGray4), lineWidth: 1.5)
+                            )
+                        
+                        if isChecked {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                                .scaleEffect(isPressed ? 1.2 : 1.0)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isChecked ? 
+                          LinearGradient(colors: [Color.green.opacity(0.08), Color.mint.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                          LinearGradient(colors: [Color(.systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(isChecked ? 
+                                   LinearGradient(colors: [Color.green.opacity(0.4), Color.mint.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                                   LinearGradient(colors: [Color(.systemGray5)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                   lineWidth: 1.5
+                            )
+                    )
+                    .shadow(color: isChecked ? .green.opacity(0.15) : .black.opacity(0.05), radius: isChecked ? 8 : 4, x: 0, y: 2)
+            )
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isPressed = pressing
+            }
+        }, perform: {})
+    }
+}
+
+// Keep the old component for compatibility
 struct PremiumCheckboxRow: View {
     let title: String
     let isChecked: Bool
