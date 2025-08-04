@@ -296,6 +296,7 @@ struct MealPlanDetailView: View {
     @State private var errorMessage: String?
     @State private var selectedDayIndex = 0
     @State private var generatingRecipeForMealId: UUID? = nil
+    @State private var showingShoppingList = false
     @EnvironmentObject var appState: AppState
     @StateObject private var openAIService = OpenAIService.shared
     
@@ -331,8 +332,7 @@ struct MealPlanDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        // TODO: Implement shopping list functionality
-                        print("🛒 Shopping cart tapped for meal plan: \(mealPlan.name)")
+                        showingShoppingList = true
                     } label: {
                         Image(systemName: "cart.fill")
                             .font(.title3)
@@ -351,6 +351,11 @@ struct MealPlanDetailView: View {
         } message: {
             if let errorMessage = errorMessage {
                 Text(errorMessage)
+            }
+        }
+        .sheet(isPresented: $showingShoppingList) {
+            NavigationView {
+                ShoppingListView()
             }
         }
     }
