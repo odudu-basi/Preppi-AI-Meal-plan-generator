@@ -26,6 +26,11 @@ struct ShoppingListView: View {
                         // Header Section
                         headerSection
                         
+                        // Progress Section
+                        if !shoppingList.isEmpty {
+                            progressSection
+                        }
+                        
                         // Shopping List Sections
                         ForEach(Array(shoppingList.keys.sorted()), id: \.self) { category in
                             if let items = shoppingList[category], !items.isEmpty {
@@ -35,11 +40,6 @@ struct ShoppingListView: View {
                                     checkedItems: $checkedItems
                                 )
                             }
-                        }
-                        
-                        // Progress Section
-                        if !shoppingList.isEmpty {
-                            progressSection
                         }
                         
                         // Bottom spacing

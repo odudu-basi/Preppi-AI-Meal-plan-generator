@@ -182,7 +182,9 @@ struct ProfileView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                ForEach(HealthGoal.allCases) { goal in
+                // Only show the 4 health goals from onboarding
+                let onboardingHealthGoals: [HealthGoal] = [.loseWeight, .maintainWeight, .gainWeight, .improveHealth]
+                ForEach(onboardingHealthGoals) { goal in
                     let isSelected = tempUserData.healthGoals.contains(goal)
                     
                     VStack(spacing: 8) {
