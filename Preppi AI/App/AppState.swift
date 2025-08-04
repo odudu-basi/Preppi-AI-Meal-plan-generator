@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var showPostOnboardingPaywall: Bool = false
     @Published var isCheckingEntitlements: Bool = false
     @Published var shouldDismissMealPlanFlow: Bool = false
+    @Published var showSplashScreen: Bool = true
     
     // MARK: - Services
     private let databaseService = LocalUserDataService.shared

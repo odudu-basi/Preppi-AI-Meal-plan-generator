@@ -44,10 +44,17 @@ struct PreppiLogo: View {
 
 struct ContentView: View {
     @StateObject private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var appDidEnterBackground = false
     
     var body: some View {
         Group {
-            if appState.shouldShowAuth {
+            if appState.showSplashScreen {
+                // Show splash screen on app launch/reentry
+                SplashScreenView {
+                    appState.showSplashScreen = false
+                }
+            } else if appState.shouldShowAuth {
                 // Show authentication if not signed in
                 SignInSignUpView()
                     .environmentObject(appState)
@@ -96,15 +103,34 @@ struct ContentView: View {
             // Debug: Print current user info
             appState.printUserInfo()
         }
+        .onChange(of: scenePhase) { newPhase in
+            switch newPhase {
+            case .background:
+                // App went to background
+                appDidEnterBackground = true
+            case .active:
+                // App became active - show splash if it was in background
+                if appDidEnterBackground && !appState.showSplashScreen {
+                    appState.showSplashScreen = true
+                    appDidEnterBackground = false
+                }
+            case .inactive:
+                // App is inactive (transition state)
+                break
+            @unknown default:
+                break
+            }
+        }
     }
 }
 
 struct MainScreenView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingProfile = false
+    @State private var navigationPath = NavigationPath()
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 // Background gradient
                 LinearGradient(
@@ -136,7 +162,9 @@ struct MainScreenView: View {
                     
                     // Buttons
                     VStack(spacing: 20) {
-                        NavigationLink(destination: MealPlanInfoView().environmentObject(appState)) {
+                        Button {
+                            navigationPath.append("MealPlanInfo")
+                        } label: {
                             HStack {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.title2)
@@ -153,7 +181,6 @@ struct MainScreenView: View {
                                     .shadow(color: .green.opacity(0.3), radius: 10, x: 0, y: 5)
                             )
                         }
-                        .buttonStyle(PlainButtonStyle())
                         
                         NavigationLink(destination: ViewMealPlansView().environmentObject(appState)) {
                             HStack {
@@ -198,6 +225,23 @@ struct MainScreenView: View {
                             .font(.title2)
                             .foregroundColor(.green)
                     }
+                }
+            }
+            .navigationDestination(for: String.self) { destination in
+                switch destination {
+                case "MealPlanInfo":
+                    MealPlanInfoView()
+                        .environmentObject(appState)
+                default:
+                    EmptyView()
+                }
+            }
+            .onChange(of: appState.shouldDismissMealPlanFlow) { shouldDismiss in
+                if shouldDismiss {
+                    // Clear the navigation path to return to main screen
+                    navigationPath = NavigationPath()
+                    // Reset the flag
+                    appState.shouldDismissMealPlanFlow = false
                 }
             }
         }

@@ -328,6 +328,18 @@ struct MealPlanDetailView: View {
             }
             .navigationTitle(mealPlan.name)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        // TODO: Implement shopping list functionality
+                        print("🛒 Shopping cart tapped for meal plan: \(mealPlan.name)")
+                    } label: {
+                        Image(systemName: "cart.fill")
+                            .font(.title3)
+                            .foregroundColor(.green)
+                    }
+                }
+            }
         }
         .onAppear {
             loadMealPlanDetails()
