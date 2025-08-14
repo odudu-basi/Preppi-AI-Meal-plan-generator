@@ -1,5 +1,20 @@
 import Foundation
 
+// MARK: - Macros Data Model
+struct Macros: Codable {
+    let protein: Double      // grams
+    let carbohydrates: Double // grams  
+    let fat: Double          // grams
+    let fiber: Double        // grams
+    let sugar: Double        // grams
+    let sodium: Double       // milligrams
+    
+    // Computed calories (4 kcal/g protein, 4 kcal/g carbs, 9 kcal/g fat)
+    var totalCalories: Int {
+        Int((protein * 4) + (carbohydrates * 4) + (fat * 9))
+    }
+}
+
 // MARK: - Meal Data Models
 struct Meal: Identifiable, Codable {
     let id: UUID
@@ -12,6 +27,7 @@ struct Meal: Identifiable, Codable {
     let originalCookingDay: String? // Day when meal was originally prepared (for leftovers)
     let imageUrl: String? // URL for AI-generated meal image
     let recommendedCaloriesBeforeDinner: Int // Recommended calories to consume before dinner based on user goals
+    let macros: Macros? // Nutritional macronutrients information
     
     // Detailed recipe fields
     let detailedIngredients: [String]? // Detailed ingredients with measurements

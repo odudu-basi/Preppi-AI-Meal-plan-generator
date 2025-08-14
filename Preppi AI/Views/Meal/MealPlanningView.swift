@@ -231,42 +231,8 @@ struct MealPlanningView: View {
     
     private var daySelector: some View {
         VStack(spacing: 20) {
-            HStack {
-                Text("Select Day")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Text("\(selectedDayIndex + 1)/7")
-                    .font(.subheadline)
-                    .foregroundColor(.green)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color.green.opacity(0.1))
-                    )
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(0..<weekdays.count, id: \.self) { index in
-                        DayButton(
-                            day: weekdays[index],
-                            icon: weekdayIcons[index],
-                            isSelected: selectedDayIndex == index,
-                            action: {
-                                withAnimation(.spring(response: 0.3)) {
-                                    selectedDayIndex = index
-                                }
-                            }
-                        )
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
+            daySelectorHeader
+            daySelectorScroll
         }
         .padding(20)
         .background(
@@ -274,6 +240,46 @@ struct MealPlanningView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
         )
+    }
+
+    private var daySelectorHeader: some View {
+        HStack {
+            Text("Select Day")
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            Text("\(selectedDayIndex + 1)/7")
+                .font(.subheadline)
+                .foregroundColor(.green)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Color.green.opacity(0.1))
+                )
+        }
+    }
+
+    private var daySelectorScroll: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                ForEach(0..<weekdays.count, id: \.self) { index in
+                    DayButton(
+                        day: weekdays[index],
+                        isSelected: selectedDayIndex == index,
+                        action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                selectedDayIndex = index
+                            }
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 4)
+        }
     }
     
     private var currentMealCard: some View {
@@ -453,17 +459,34 @@ struct MealPlanningView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                        )
-                )
+                
+                // Daily Nutritional Breakdown
+                if let macros = dayMeal.meal.macros {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Daily Nutritional Breakdown")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                        }
+                        
+                        CompactMacrosView(macros: macros)
+                    }
+                    .padding(.top, 16)
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.blue.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                    )
+            )
             .padding(.horizontal, 24)
             .padding(.top, 20)
             
@@ -637,6 +660,10 @@ struct MealPlanningView: View {
                     mealCount: mealCount
                 )
                 
+                // Now that meal plan is saved, convert any temporary images to permanent ones
+                print("🔄 Converting temporary images to permanent storage...")
+                await convertTemporaryImagesToPermanent()
+                
                 await MainActor.run {
                     isSavingMealPlan = false
                     showingSaveSuccess = true
@@ -689,11 +716,12 @@ struct MealPlanningView: View {
             do {
                 print("🔄 Starting image generation for: \(dayMeal.meal.name) (ID: \(dayMeal.meal.id))")
                 
-                let imageUrl = try await openAIService.generateMealImage(for: dayMeal.meal)
+                let imageUrl = try await openAIService.generateMealImageTemporary(for: dayMeal.meal)
                 
-                print("✅ Image generated successfully for: \(dayMeal.meal.name)")
+                print("✅ Temporary image generated successfully for: \(dayMeal.meal.name)")
                 
-                // Update the meal with the image URL in local state
+                // Update the meal with the TEMPORARY image URL in local state only
+                // DO NOT save to database yet - only save when meal plan is finalized
                 await MainActor.run {
                     if let index = mealPlan.firstIndex(where: { $0.meal.id == dayMeal.meal.id }) {
                         let updatedMeal = Meal(
@@ -705,8 +733,9 @@ struct MealPlanningView: View {
                             ingredients: dayMeal.meal.ingredients,
                             instructions: dayMeal.meal.instructions,
                             originalCookingDay: dayMeal.meal.originalCookingDay,
-                            imageUrl: imageUrl,
+                            imageUrl: imageUrl, // This is now a temporary DALL-E URL
                             recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                            macros: dayMeal.meal.macros,
                             detailedIngredients: dayMeal.meal.detailedIngredients,
                             detailedInstructions: dayMeal.meal.detailedInstructions,
                             cookingTips: dayMeal.meal.cookingTips,
@@ -714,18 +743,14 @@ struct MealPlanningView: View {
                         )
                         
                         mealPlan[index] = DayMeal(day: dayMeal.day, meal: updatedMeal)
-                        print("✅ Local state updated for meal: \(dayMeal.meal.name)")
+                        print("✅ Local state updated with temporary image for: \(dayMeal.meal.name)")
                     } else {
                         print("⚠️ Could not find meal with ID \(dayMeal.meal.id) in mealPlan array")
                     }
                     generatingImageForMealId = nil
                 }
                 
-                // Update the meal in the database
-                print("💾 Updating database with image URL for meal ID: \(dayMeal.meal.id)")
-                try await databaseService.updateMealImage(mealId: dayMeal.meal.id, imageUrl: imageUrl)
-                
-                print("✅ Successfully generated and saved meal image for \(dayMeal.meal.name)")
+                print("✅ Temporary image ready for display (will be saved permanently when meal plan is saved)")
                 
             } catch {
                 await MainActor.run {
@@ -735,20 +760,69 @@ struct MealPlanningView: View {
             }
         }
     }
+    
+    /// Converts any temporary DALL-E image URLs to permanent Supabase Storage URLs
+    private func convertTemporaryImagesToPermanent() async {
+        print("🔄 Starting image conversion process for \(mealPlan.count) meals")
+        
+        for dayMeal in mealPlan {
+            print("🔍 Checking meal: \(dayMeal.meal.name) (ID: \(dayMeal.meal.id))")
+            print("   Image URL: \(dayMeal.meal.imageUrl ?? "nil")")
+            
+            // Check if this meal has a temporary image URL (DALL-E URLs contain "oaidalleapiprodscus")
+            if let imageUrl = dayMeal.meal.imageUrl, 
+               !imageUrl.isEmpty,
+               imageUrl.contains("oaidalleapiprodscus") { // This identifies DALL-E temporary URLs
+                
+                print("✅ Found temporary image to convert for: \(dayMeal.meal.name)")
+                
+                do {
+                    print("🔄 Converting temporary image to permanent for: \(dayMeal.meal.name)")
+                    print("   Meal ID: \(dayMeal.meal.id)")
+                    print("   Temporary URL: \(imageUrl)")
+                    
+                    // Download and store the image permanently
+                    let permanentImageUrl = try await ImageStorageService.shared.downloadAndStoreImage(
+                        from: imageUrl,
+                        for: dayMeal.meal.id
+                    )
+                    
+                    print("🎯 Generated permanent URL: \(permanentImageUrl)")
+                    
+                    // Update the database with the permanent URL
+                    print("💾 Updating database for meal ID: \(dayMeal.meal.id)")
+                    try await databaseService.updateMealImage(mealId: dayMeal.meal.id, imageUrl: permanentImageUrl)
+                    
+                    print("✅ Successfully converted temporary image to permanent for: \(dayMeal.meal.name)")
+                    
+                } catch {
+                    print("❌ Failed to convert temporary image for \(dayMeal.meal.name): \(error)")
+                    print("   Error details: \(error.localizedDescription)")
+                    // Continue with other images even if one fails
+                }
+            } else {
+                print("⏭️ Skipping meal \(dayMeal.meal.name) - no temporary image found")
+            }
+        }
+        
+        print("✅ Finished converting all temporary images to permanent storage")
+    }
 }
 
 // MARK: - Supporting Views
 struct DayButton: View {
     let day: String
-    let icon: String
+    let icon: String? = nil
     let isSelected: Bool
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Text(icon)
-                    .font(.system(size: 24))
+                if let icon = icon {
+                    Text(icon)
+                        .font(.system(size: 24))
+                }
                 
                 Text(String(day.prefix(3)))
                     .font(.caption)

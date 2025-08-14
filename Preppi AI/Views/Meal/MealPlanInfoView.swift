@@ -112,13 +112,6 @@ struct MealPlanInfoView: View {
                 }
             )
         }
-        .onChange(of: appState.shouldDismissMealPlanFlow) { shouldDismiss in
-            if shouldDismiss {
-                // Reset the state and dismiss
-                appState.shouldDismissMealPlanFlow = false
-                dismiss()
-            }
-        }
     }
     
     // MARK: - Header Section

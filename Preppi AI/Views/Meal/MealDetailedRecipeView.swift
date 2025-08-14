@@ -290,6 +290,14 @@ struct MealDetailedRecipeView: View {
         originalCookingDay: "Monday",
         imageUrl: nil,
         recommendedCaloriesBeforeDinner: 1400,
+        macros: Macros(
+            protein: 45.5,
+            carbohydrates: 25.2,
+            fat: 18.7,
+            fiber: 8.3,
+            sugar: 12.1,
+            sodium: 590.5
+        ),
         detailedIngredients: [
             "2 boneless skinless chicken breasts (6 oz each)",
             "1 cup quinoa",
@@ -309,7 +317,7 @@ struct MealDetailedRecipeView: View {
     
     let sampleDayMeal = DayMeal(day: "Monday", meal: sampleMeal)
     
-    return NavigationView {
+    NavigationView {
         MealDetailedRecipeView(dayMeal: sampleDayMeal)
     }
 }

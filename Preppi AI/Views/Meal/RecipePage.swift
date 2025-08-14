@@ -564,6 +564,14 @@ struct CookingTipView: View {
         originalCookingDay: "Monday",
         imageUrl: nil,
         recommendedCaloriesBeforeDinner: 1400,
+        macros: Macros(
+            protein: 45.5,
+            carbohydrates: 25.2,
+            fat: 18.7,
+            fiber: 8.3,
+            sugar: 12.1,
+            sodium: 590.5
+        ),
         detailedIngredients: nil,
         detailedInstructions: nil,
         cookingTips: nil,
@@ -572,7 +580,7 @@ struct CookingTipView: View {
     
     let sampleDayMeal = DayMeal(day: "Monday", meal: sampleMeal)
     
-    return NavigationView {
+    NavigationView {
         RecipePage(dayMeal: sampleDayMeal)
             .environmentObject(AppState())
     }

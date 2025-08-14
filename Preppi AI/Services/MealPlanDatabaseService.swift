@@ -39,6 +39,12 @@ struct DatabaseMeal: Codable {
     let originalCookingDay: String?
     let imageUrl: String?
     let recommendedCaloriesBeforeDinner: Int
+    let protein: Double?
+    let carbohydrates: Double?
+    let fat: Double?
+    let fiber: Double?
+    let sugar: Double?
+    let sodium: Double?
     let detailedIngredients: [String]?
     let detailedInstructions: [String]?
     let cookingTips: [String]?
@@ -55,6 +61,12 @@ struct DatabaseMeal: Codable {
         case originalCookingDay = "original_cooking_day"
         case imageUrl = "image_url"
         case recommendedCaloriesBeforeDinner = "recommended_calories_before_dinner"
+        case protein
+        case carbohydrates
+        case fat
+        case fiber
+        case sugar
+        case sodium
         case detailedIngredients = "detailed_ingredients"
         case detailedInstructions = "detailed_instructions"
         case cookingTips = "cooking_tips"
@@ -185,6 +197,18 @@ class MealPlanDatabaseService {
             // Save all meals and create day_meals relationships
             try await saveMealsForMealPlan(dayMeals: dayMeals, mealPlanId: mealPlanId)
             
+            // Track meal plan saved in Mixpanel
+            MixpanelService.shared.track(
+                event: MixpanelService.Events.mealPlanSaved,
+                properties: [
+                    MixpanelService.Properties.mealCount: mealCount,
+                    MixpanelService.Properties.cuisineTypes: selectedCuisines.joined(separator: ", "),
+                    MixpanelService.Properties.preparationStyle: mealPreparationStyle.rawValue,
+                    "total_meals": dayMeals.count,
+                    "meal_plan_id": mealPlanId.uuidString
+                ]
+            )
+            
             return mealPlanId
             
         } catch {
@@ -240,8 +264,40 @@ class MealPlanDatabaseService {
             .value
     }
     
-    /// Delete a meal plan (sets is_active to false)
+    /// Delete a meal plan (sets is_active to false) and cleans up associated images
     func deleteMealPlan(mealPlanId: UUID) async throws {
+        print("🗑️ Starting meal plan deletion with image cleanup for: \(mealPlanId)")
+        
+        // Step 1: Get all meals in this meal plan to delete their images
+        do {
+            let dayMeals = try await getDayMealsForMealPlan(mealPlanId: mealPlanId)
+            
+            print("🔄 Found \(dayMeals.count) meals to clean up images for")
+            
+            // Step 2: Delete images from storage for each meal that has one
+            for dayMeal in dayMeals {
+                if let imageUrl = dayMeal.meal.imageUrl, 
+                   !imageUrl.isEmpty,
+                   !imageUrl.contains("oaidalleapiprodscus") { // Only delete permanent storage images, not temp DALL-E URLs
+                    
+                    do {
+                        try await ImageStorageService.shared.deleteImage(for: dayMeal.meal.id)
+                        print("✅ Deleted image for meal: \(dayMeal.meal.name)")
+                    } catch {
+                        print("⚠️ Failed to delete image for meal \(dayMeal.meal.name): \(error)")
+                        // Continue with deletion even if image cleanup fails
+                    }
+                }
+            }
+            
+            print("✅ Image cleanup completed")
+            
+        } catch {
+            print("⚠️ Failed to get meals for image cleanup: \(error)")
+            // Continue with meal plan deletion even if image cleanup fails
+        }
+        
+        // Step 3: Soft delete the meal plan
         let update = ["is_active": false]
         
         let _: DatabaseMealPlan = try await supabase.database
@@ -251,6 +307,8 @@ class MealPlanDatabaseService {
             .single()
             .execute()
             .value
+        
+        print("✅ Meal plan soft deleted: \(mealPlanId)")
     }
     
     /// Update a meal's image URL
@@ -379,9 +437,9 @@ class MealPlanDatabaseService {
     
     private func saveMealsForMealPlan(dayMeals: [DayMeal], mealPlanId: UUID) async throws {
         for (index, dayMeal) in dayMeals.enumerated() {
-            // Save the meal
+            // Save the meal with preserved ID for image updates
             let databaseMeal = DatabaseMeal(
-                id: nil,
+                id: dayMeal.meal.id,
                 name: dayMeal.meal.name,
                 description: dayMeal.meal.description,
                 calories: dayMeal.meal.calories,
@@ -389,6 +447,12 @@ class MealPlanDatabaseService {
                 originalCookingDay: dayMeal.meal.originalCookingDay,
                 imageUrl: dayMeal.meal.imageUrl,
                 recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                protein: dayMeal.meal.macros?.protein,
+                carbohydrates: dayMeal.meal.macros?.carbohydrates,
+                fat: dayMeal.meal.macros?.fat,
+                fiber: dayMeal.meal.macros?.fiber,
+                sugar: dayMeal.meal.macros?.sugar,
+                sodium: dayMeal.meal.macros?.sodium,
                 detailedIngredients: dayMeal.meal.detailedIngredients,
                 detailedInstructions: dayMeal.meal.detailedInstructions,
                 cookingTips: dayMeal.meal.cookingTips,
@@ -507,7 +571,7 @@ class MealPlanDatabaseService {
         }
     }
     
-    private func getDayMealsForMealPlan(mealPlanId: UUID) async throws -> [DayMeal] {
+    func getDayMealsForMealPlan(mealPlanId: UUID) async throws -> [DayMeal] {
         // This is a simplified version - in a full implementation, you'd use the view
         // to get all the data in one query with proper joins
         
@@ -553,6 +617,24 @@ class MealPlanDatabaseService {
                 // CRITICAL: Use the database meal ID, not generate a new UUID
                 let actualMealId = meal.id ?? dayMealRecord.mealId
                 
+                // Create macros if all values are present
+                var macros: Macros? = nil
+                if let protein = meal.protein,
+                   let carbohydrates = meal.carbohydrates,
+                   let fat = meal.fat,
+                   let fiber = meal.fiber,
+                   let sugar = meal.sugar,
+                   let sodium = meal.sodium {
+                    macros = Macros(
+                        protein: protein,
+                        carbohydrates: carbohydrates,
+                        fat: fat,
+                        fiber: fiber,
+                        sugar: sugar,
+                        sodium: sodium
+                    )
+                }
+                
                 // Convert to app models
                 let appMeal = Meal(
                     id: actualMealId,  // Use actual database ID
@@ -565,6 +647,7 @@ class MealPlanDatabaseService {
                     originalCookingDay: meal.originalCookingDay,
                     imageUrl: meal.imageUrl,
                     recommendedCaloriesBeforeDinner: meal.recommendedCaloriesBeforeDinner,
+                    macros: macros,
                     detailedIngredients: meal.detailedIngredients,
                     detailedInstructions: meal.detailedInstructions,
                     cookingTips: meal.cookingTips,

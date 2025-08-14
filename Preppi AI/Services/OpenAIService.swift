@@ -114,6 +114,25 @@ class OpenAIService: ObservableObject {
                 
                 let originalCookingDay = mealData["originalCookingDay"] as? String
                 
+                // Parse macros if available
+                var macros: Macros? = nil
+                if let macrosData = mealData["macros"] as? [String: Any],
+                   let protein = macrosData["protein"] as? Double,
+                   let carbohydrates = macrosData["carbohydrates"] as? Double,
+                   let fat = macrosData["fat"] as? Double,
+                   let fiber = macrosData["fiber"] as? Double,
+                   let sugar = macrosData["sugar"] as? Double,
+                   let sodium = macrosData["sodium"] as? Double {
+                    macros = Macros(
+                        protein: protein,
+                        carbohydrates: carbohydrates,
+                        fat: fat,
+                        fiber: fiber,
+                        sugar: sugar,
+                        sodium: sodium
+                    )
+                }
+                
                 // Calculate recommended calories before dinner based on user goals
                 let recommendedCalories = CalorieCalculationService.shared.calculateRecommendedCaloriesBeforeDinner(for: userData)
                 
@@ -128,6 +147,7 @@ class OpenAIService: ObservableObject {
                     originalCookingDay: originalCookingDay,
                     imageUrl: nil, // No image initially - will be generated on demand
                     recommendedCaloriesBeforeDinner: recommendedCalories,
+                    macros: macros, // Include parsed macros
                     detailedIngredients: nil, // Will be generated when detailed recipe is requested
                     detailedInstructions: nil,
                     cookingTips: nil,
@@ -147,6 +167,18 @@ class OpenAIService: ObservableObject {
                let shoppingListString = String(data: shoppingListData, encoding: .utf8) {
                 UserDefaults.standard.set(shoppingListString, forKey: "weeklyShoppingList")
             }
+            
+            // Track meal plan generation success
+            MixpanelService.shared.track(
+                event: MixpanelService.Events.mealPlanGenerated,
+                properties: [
+                    MixpanelService.Properties.mealCount: mealCount,
+                    MixpanelService.Properties.cuisineTypes: cuisines.joined(separator: ", "),
+                    MixpanelService.Properties.preparationStyle: preparationStyle.rawValue,
+                    "total_meals_generated": dayMeals.count,
+                    "has_macros": dayMeals.first?.meal.macros != nil
+                ]
+            )
             
             return dayMeals
             
@@ -227,6 +259,7 @@ class OpenAIService: ObservableObject {
         4. Cook time in minutes
         5. Main ingredients list (5-8 key ingredients)
         6. Original cooking day (if this is a repeated/leftover meal, specify which day it was originally prepared, e.g., "Monday". If it's a fresh meal, use the current day)
+        7. Detailed macronutrient breakdown with accurate values based on ingredients and portions
         
         For ingredients, include:
         - Key ingredients without specific quantities (e.g., "chicken breasts", "quinoa", "olive oil")
@@ -259,7 +292,15 @@ class OpenAIService: ObservableObject {
               "calories": 650,
               "cookTime": 35,
               "ingredients": ["chicken breasts", "quinoa", "olive oil", "lemon", "garlic", "oregano", "bell pepper", "zucchini"],
-              "originalCookingDay": "Monday"
+              "originalCookingDay": "Monday",
+              "macros": {
+                "protein": 45.5,
+                "carbohydrates": 55.2,
+                "fat": 18.7,
+                "fiber": 8.3,
+                "sugar": 12.1,
+                "sodium": 890.5
+              }
             }
           ],
           "shoppingList": {
@@ -462,6 +503,7 @@ class OpenAIService: ObservableObject {
         return prompt
     }
     
+    /// Generates a meal image and saves it permanently to Supabase Storage
     func generateMealImage(for meal: Meal) async throws -> String {
         // Note: Not setting global isGenerating to avoid full-page loading view
         // Individual views should manage their own loading states
@@ -516,10 +558,95 @@ class OpenAIService: ObservableObject {
         
         do {
             let imageResponse = try JSONDecoder().decode(ImageGenerationResponse.self, from: data)
-            guard let imageUrl = imageResponse.data.first?.url else {
+            guard let temporaryImageUrl = imageResponse.data.first?.url else {
                 throw OpenAIError.parsingError
             }
-            return imageUrl
+            
+            print("🔗 Generated temporary DALL-E URL: \(temporaryImageUrl)")
+            
+            // Download and store the image permanently in Supabase Storage
+            print("📥 Downloading and storing image permanently...")
+            let permanentImageUrl = try await ImageStorageService.shared.downloadAndStoreImage(
+                from: temporaryImageUrl,
+                for: meal.id
+            )
+            
+            print("✅ Image stored permanently: \(permanentImageUrl)")
+            return permanentImageUrl
+            
+        } catch {
+            if error is ImageStorageError {
+                // Re-throw image storage errors as-is
+                throw error
+            } else {
+                throw OpenAIError.parsingError
+            }
+        }
+    }
+    
+    /// Generates a meal image temporarily (returns DALL-E URL without saving to storage)
+    /// Use this during meal planning when you don't want to save the image permanently yet
+    func generateMealImageTemporary(for meal: Meal) async throws -> String {
+        // Note: Not setting global isGenerating to avoid full-page loading view
+        // Individual views should manage their own loading states
+        
+        await MainActor.run {
+            errorMessage = nil
+        }
+        
+        let prompt = createImagePrompt(for: meal)
+        
+        let requestBody: [String: Any] = [
+            "model": "dall-e-3",
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+            "quality": "standard",
+            "style": "natural"
+        ]
+        
+        guard let url = URL(string: imageGenerationURL) else {
+            throw OpenAIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+        
+        do {
+            let imageResponse = try JSONDecoder().decode(ImageGenerationResponse.self, from: data)
+            guard let temporaryImageUrl = imageResponse.data.first?.url else {
+                throw OpenAIError.parsingError
+            }
+            
+            print("🔗 Generated temporary DALL-E URL (not saved): \(temporaryImageUrl)")
+            return temporaryImageUrl
+            
         } catch {
             throw OpenAIError.parsingError
         }

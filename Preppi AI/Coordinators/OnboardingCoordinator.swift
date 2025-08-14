@@ -21,9 +21,20 @@ class OnboardingCoordinator: ObservableObject {
     
     init(appState: AppState? = nil) {
         self.appState = appState
+        
+        // Track onboarding started
+        MixpanelService.shared.track(
+            event: MixpanelService.Events.onboardingStarted,
+            properties: [
+                MixpanelService.Properties.onboardingStep: currentStep.rawValue,
+                MixpanelService.Properties.stepName: currentStep.title
+            ]
+        )
     }
     
     func nextStep() {
+        let previousStep = currentStep
+        
         switch currentStep {
         case .name:
             currentStep = .cookingPreference
@@ -43,7 +54,19 @@ class OnboardingCoordinator: ObservableObject {
             currentStep = .budget
         case .budget:
             completeOnboarding()
+            return // Don't track step completion for the last step since completeOnboarding handles it
         }
+        
+        // Track step completion
+        MixpanelService.shared.track(
+            event: MixpanelService.Events.onboardingStepCompleted,
+            properties: [
+                MixpanelService.Properties.onboardingStep: previousStep.rawValue,
+                MixpanelService.Properties.stepName: previousStep.title,
+                "next_step": currentStep.rawValue,
+                "next_step_name": currentStep.title
+            ]
+        )
     }
     
     func previousStep() {
@@ -89,10 +112,22 @@ class OnboardingCoordinator: ObservableObject {
                         // User already has Pro, complete onboarding
                         isOnboardingComplete = true
                         print("✅ User already has Pro entitlement - onboarding completed")
+                        
+                        // Track onboarding completion
+                        MixpanelService.shared.track(
+                            event: MixpanelService.Events.onboardingCompleted,
+                            properties: [
+                                "completion_method": "existing_premium",
+                                "total_steps": OnboardingStep.totalSteps
+                            ]
+                        )
                     } else {
                         // Show paywall
                         showPaywall = true
                         print("💰 Showing paywall for Pro subscription")
+                        
+                        // Track paywall shown
+                        MixpanelService.shared.track(event: MixpanelService.Events.paywallViewed)
                     }
                 } else {
                     isSaving = false
@@ -118,6 +153,21 @@ class OnboardingCoordinator: ObservableObject {
         isPurchaseCompleted = true
         isOnboardingComplete = true
         print("✅ Purchase completed - onboarding finished")
+        
+        // Track purchase completion and onboarding completion
+        MixpanelService.shared.track(event: MixpanelService.Events.subscriptionPurchased)
+        MixpanelService.shared.track(
+            event: MixpanelService.Events.onboardingCompleted,
+            properties: [
+                "completion_method": "purchase",
+                "total_steps": OnboardingStep.totalSteps
+            ]
+        )
+        
+        // Update premium status in AuthService
+        Task { @MainActor in
+            AuthService.shared.updatePremiumStatus(isPremium: true)
+        }
     }
     
 

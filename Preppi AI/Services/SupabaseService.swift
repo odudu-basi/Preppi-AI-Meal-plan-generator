@@ -20,6 +20,10 @@ class SupabaseService {
         client.realtime
     }
     
+    var storage: SupabaseStorageClient {
+        client.storage
+    }
+    
     private init() {
         guard let url = URL(string: ConfigurationService.shared.supabaseURL) else {
             fatalError("Invalid Supabase URL")

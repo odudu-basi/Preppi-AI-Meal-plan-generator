@@ -107,14 +107,18 @@ struct ContentView: View {
 struct MainScreenView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingProfile = false
+    @State private var showingFounderUpdates = false
     @State private var navigationPath = NavigationPath()
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack {
-                // Background gradient
+                // Background gradient - adaptive for light/dark mode
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.black, Color.green]),
+                    gradient: Gradient(colors: colorScheme == .light ? 
+                        [Color.white, Color(.systemGray6)] : 
+                        [Color.black, Color.green]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -128,7 +132,7 @@ struct MainScreenView: View {
                     
                     Text("Your AI-powered meal companion")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colorScheme == .light ? Color(.systemGray) : .secondary)
                     
                     // Welcome message with user's name
                     if !appState.userData.name.isEmpty {
@@ -197,13 +201,23 @@ struct MainScreenView: View {
                 .padding()
             }
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showingFounderUpdates = true
+                    }) {
+                        Image(systemName: "info.circle")
+                            .font(.title2)
+                            .foregroundColor(colorScheme == .light ? Color(.label) : .green)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         showingProfile = true
                     }) {
                         Image(systemName: "person.circle")
                             .font(.title2)
-                            .foregroundColor(.green)
+                            .foregroundColor(colorScheme == .light ? Color(.label) : .green)
                     }
                 }
             }
@@ -229,10 +243,135 @@ struct MainScreenView: View {
             ProfileMenuView()
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $showingFounderUpdates) {
+            FounderUpdatesView()
+        }
     }
 }
 
+// MARK: - Founder Updates View
+struct FounderUpdatesView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header section
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "megaphone.fill")
+                            .font(.title2)
+                            .foregroundColor(.green)
+                        
+                        Text("Updates from the founder")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Text("Stay up to date with the latest features and improvements")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 20)
+                
+                // Content section
+                VStack(alignment: .leading, spacing: 16) {
+                    UpdateMessageCard(
+                        icon: "lightbulb.fill",
+                        title: "Feature Requests",
+                        message: "To request features, go to feature requests on your profile menu",
+                        iconColor: .orange
+                    )
+                    
+                    UpdateMessageCard(
+                        icon: "sunrise.fill",
+                        title: "Breakfast and Lunch",
+                        message: "Breakfast and lunch options are coming soon.",
+                        iconColor: .blue
+                    )
+                    
+                    UpdateMessageCard(
+                        icon: "flame.fill",
+                        title: "Streaks",
+                        message: "Streaks are coming soon, stay tuned!",
+                        iconColor: .orange
+                    )
+                    
+                    UpdateMessageCard(
+                        icon: "heart.fill",
+                        title: "Thank You",
+                        message: "Thank you for using Preppi AI! Your feedback helps us improve.",
+                        iconColor: .red
+                    )
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .background(Color(.systemGroupedBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                }
+            }
+        }
+    }
+}
 
+// MARK: - Update Message Card Component
+struct UpdateMessageCard: View {
+    let icon: String
+    let title: String
+    let message: String
+    let iconColor: Color
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            // Icon
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [iconColor, iconColor.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+            
+            // Content
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                Text(message)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+        )
+    }
+}
 
 #Preview {
     ContentView()

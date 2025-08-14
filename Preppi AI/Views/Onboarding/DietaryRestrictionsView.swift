@@ -13,8 +13,8 @@ struct DietaryRestrictionsView: View {
     
     var body: some View {
         OnboardingContainer {
-            VStack(spacing: 20) {
-                // Progress indicator
+            VStack(spacing: 0) {
+                // Progress indicator - Fixed at top
                 OnboardingNavigationBar(
                     currentStep: 8,
                     totalSteps: OnboardingStep.totalSteps,
@@ -23,132 +23,138 @@ struct DietaryRestrictionsView: View {
                         coordinator.previousStep()
                     }
                 )
-                
-                // Header with enhanced styling
-                VStack(spacing: 20) {
-                    // Icon with gradient background
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.green.opacity(0.1), .blue.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 80, height: 80)
-                            .scaleEffect(animateHeader ? 1.0 : 0.8)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                        
-                        Image(systemName: "leaf.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.green, .mint],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .scaleEffect(animateHeader ? 1.0 : 0.8)
-                    }
-                    
-                    VStack(spacing: 12) {
-                        Text("Dietary Preferences")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.primary, .green],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
-                        
-                        Text("Help us personalize your meal plans by sharing any dietary restrictions or allergies")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .padding(.horizontal, 20)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
-                        
-                        // Skip guidance text
-                        Text("Don't have any dietary restrictions? You can continue to the next step.")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(.green)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 8)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
-                    }
-                }
-                .padding(.vertical, 10)
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 25) {
-                    // Dietary Restrictions Section
-                    PremiumSection(
-                        title: "Dietary Restrictions", 
-                        icon: "leaf.fill",
-                        iconColor: .green
-                    ) {
-                        VStack(spacing: 12) {
-                            ForEach(DietaryRestriction.allCases, id: \.self) { restriction in
-                                ImprovedCheckboxRow(
-                                    title: restriction.rawValue,
-                                    emoji: restriction.emoji,
-                                    isChecked: coordinator.userData.dietaryRestrictions.contains(restriction)
-                                ) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        if coordinator.userData.dietaryRestrictions.contains(restriction) {
-                                            coordinator.userData.dietaryRestrictions.remove(restriction)
-                                        } else {
-                                            coordinator.userData.dietaryRestrictions.insert(restriction)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Allergies Section
-                    PremiumSection(
-                        title: "Food Allergies", 
-                        icon: "exclamationmark.shield.fill",
-                        iconColor: .orange
-                    ) {
-                        VStack(spacing: 12) {
-                            ForEach(Allergy.allCases, id: \.self) { allergy in
-                                ImprovedCheckboxRow(
-                                    title: allergy.rawValue,
-                                    emoji: allergy.emoji,
-                                    isChecked: coordinator.userData.foodAllergies.contains(allergy)
-                                ) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        if coordinator.userData.foodAllergies.contains(allergy) {
-                                            coordinator.userData.foodAllergies.remove(allergy)
-                                        } else {
-                                            coordinator.userData.foodAllergies.insert(allergy)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
                 .padding(.horizontal, 20)
-            }
-            
-            // Navigation Buttons
-            PremiumNavigationButtons(
-                onBack: { coordinator.previousStep() },
-                onNext: { coordinator.nextStep() }
-            )
-            .padding(.horizontal, 20)
-            .padding(.bottom, 10)
+                .padding(.bottom, 10)
+                
+                // Scrollable content
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 30) {
+                        // Header with enhanced styling
+                        VStack(spacing: 20) {
+                            // Icon with gradient background
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.green.opacity(0.1), .blue.opacity(0.1)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 80, height: 80)
+                                    .scaleEffect(animateHeader ? 1.0 : 0.8)
+                                    .opacity(animateHeader ? 1.0 : 0.0)
+                                
+                                Image(systemName: "leaf.circle.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.green, .mint],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .scaleEffect(animateHeader ? 1.0 : 0.8)
+                            }
+                            
+                            VStack(spacing: 12) {
+                                Text("Dietary Preferences")
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.primary, .green],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .opacity(animateHeader ? 1.0 : 0.0)
+                                    .offset(y: animateHeader ? 0 : 20)
+                                
+                                Text("Help us personalize your meal plans by sharing any dietary restrictions or allergies")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(3)
+                                    .padding(.horizontal, 20)
+                                    .opacity(animateHeader ? 1.0 : 0.0)
+                                    .offset(y: animateHeader ? 0 : 20)
+                                
+                                // Skip guidance text
+                                Text("Don't have any dietary restrictions? You can continue to the next step.")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.green)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
+                                    .opacity(animateHeader ? 1.0 : 0.0)
+                                    .offset(y: animateHeader ? 0 : 20)
+                            }
+                        }
+                        .padding(.top, 20)
+                        
+                        // Content Sections
+                        VStack(spacing: 25) {
+                            // Dietary Restrictions Section
+                            PremiumSection(
+                                title: "Dietary Restrictions", 
+                                icon: "leaf.fill",
+                                iconColor: .green
+                            ) {
+                                VStack(spacing: 12) {
+                                    ForEach(DietaryRestriction.allCases, id: \.self) { restriction in
+                                        ImprovedCheckboxRow(
+                                            title: restriction.rawValue,
+                                            emoji: restriction.emoji,
+                                            isChecked: coordinator.userData.dietaryRestrictions.contains(restriction)
+                                        ) {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                if coordinator.userData.dietaryRestrictions.contains(restriction) {
+                                                    coordinator.userData.dietaryRestrictions.remove(restriction)
+                                                } else {
+                                                    coordinator.userData.dietaryRestrictions.insert(restriction)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Allergies Section
+                            PremiumSection(
+                                title: "Food Allergies", 
+                                icon: "exclamationmark.shield.fill",
+                                iconColor: .orange
+                            ) {
+                                VStack(spacing: 12) {
+                                    ForEach(Allergy.allCases, id: \.self) { allergy in
+                                        ImprovedCheckboxRow(
+                                            title: allergy.rawValue,
+                                            emoji: allergy.emoji,
+                                            isChecked: coordinator.userData.foodAllergies.contains(allergy)
+                                        ) {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                if coordinator.userData.foodAllergies.contains(allergy) {
+                                                    coordinator.userData.foodAllergies.remove(allergy)
+                                                } else {
+                                                    coordinator.userData.foodAllergies.insert(allergy)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // Navigation Buttons
+                        PremiumNavigationButtons(
+                            onBack: { coordinator.previousStep() },
+                            onNext: { coordinator.nextStep() }
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 30)
+                    }
+                }
             }
         }
         .onAppear {

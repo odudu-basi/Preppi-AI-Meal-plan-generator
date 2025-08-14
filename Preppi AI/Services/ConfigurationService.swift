@@ -38,4 +38,11 @@ class ConfigurationService {
         }
         return key
     }
+    
+    var mixpanelToken: String {
+        guard let token = config["Mixpanel_Token"] as? String, !token.isEmpty else {
+            fatalError("Mixpanel Token not found in APIKeys.plist")
+        }
+        return token
+    }
 }

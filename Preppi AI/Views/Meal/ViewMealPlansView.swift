@@ -198,16 +198,7 @@ struct MealPlanCardView: View {
     var body: some View {
         NavigationLink(destination: MealPlanDetailView(mealPlan: mealPlan)) {
             HStack(spacing: 16) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(Color.green.opacity(0.1))
-                        .frame(width: 60, height: 60)
-                    
-                    Image(systemName: mealPlan.mealPreparationStyle == "multiplePortions" ? "square.stack.3d.up.fill" : "sparkles")
-                        .font(.title2)
-                        .foregroundColor(.green)
-                }
+                // Removed icon circle completely
                 
                 // Content
                 VStack(alignment: .leading, spacing: 6) {
@@ -356,7 +347,12 @@ struct MealPlanDetailView: View {
         }
         .sheet(isPresented: $showingShoppingList) {
             NavigationView {
-                ShoppingListView()
+                if let mealPlanId = mealPlan.id {
+                    ShoppingListView(mealPlanId: mealPlanId)
+                } else {
+                    Text("Error: Meal plan ID not available")
+                        .foregroundColor(.red)
+                }
             }
         }
     }
@@ -404,19 +400,21 @@ struct MealPlanDetailView: View {
     
     // MARK: - Meal Plan Content
     private var mealPlanContent: some View {
-        VStack(spacing: 0) {
-            // Meal Plan Info Header
-            mealPlanInfoHeader
-            
-            // Day Selector
-            daySelector
-            
-            // Meal Details
-            if selectedDayIndex < dayMeals.count {
-                mealDetailCard
+        ScrollView {
+            VStack(spacing: 0) {
+                // Meal Plan Info Header
+                mealPlanInfoHeader
+                
+                // Day Selector
+                daySelector
+                
+                // Meal Details
+                if selectedDayIndex < dayMeals.count {
+                    mealDetailCard
+                }
+                
+                Spacer(minLength: 20)
             }
-            
-            Spacer()
         }
     }
     
@@ -435,10 +433,15 @@ struct MealPlanDetailView: View {
                         
                         Spacer()
                         
-                        Label(mealPlan.mealPreparationStyle == "multiplePortions" ? "Batch Cooking" : "Fresh Daily", 
-                              systemImage: mealPlan.mealPreparationStyle == "multiplePortions" ? "square.stack.3d.up.fill" : "sparkles")
-                            .font(.caption)
-                            .foregroundColor(.green)
+                        if mealPlan.mealPreparationStyle == "multiplePortions" {
+                            Label("Batch Cooking", systemImage: "square.stack.3d.up.fill")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Fresh Daily")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
                     }
                 }
                 
@@ -481,7 +484,6 @@ struct MealPlanDetailView: View {
                 ForEach(0..<weekdays.count, id: \.self) { index in
                     DayButton(
                         day: weekdays[index],
-                        icon: weekdayIcons[index],
                         isSelected: selectedDayIndex == index,
                         action: {
                             withAnimation(.spring(response: 0.3)) {
@@ -499,8 +501,7 @@ struct MealPlanDetailView: View {
     private var mealDetailCard: some View {
         let dayMeal = dayMeals[selectedDayIndex]
         
-        return ScrollView {
-            VStack(spacing: 20) {
+        return VStack(spacing: 20) {
                 // Meal header
                 VStack(spacing: 16) {
                     Text(dayMeal.meal.name)
@@ -640,6 +641,23 @@ struct MealPlanDetailView: View {
                                 .foregroundColor(.green)
                         }
                     }
+                    
+                    // Daily Nutritional Breakdown
+                    if let macros = dayMeal.meal.macros {
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Daily Nutritional Breakdown")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                            }
+                            
+                            CompactMacrosView(macros: macros)
+                        }
+                        .padding(.top, 16)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -761,7 +779,6 @@ struct MealPlanDetailView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 40)
-        }
     }
     
     // MARK: - Helper Methods
@@ -927,6 +944,7 @@ struct MealPlanDetailView: View {
                             originalCookingDay: dayMeal.meal.originalCookingDay,
                             imageUrl: dayMeal.meal.imageUrl,
                             recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                            macros: dayMeal.meal.macros,
                             detailedIngredients: detailedRecipe.detailedIngredients,
                             detailedInstructions: detailedRecipe.instructions,
                             cookingTips: detailedRecipe.cookingTips,
@@ -993,6 +1011,7 @@ struct MealPlanDetailView: View {
                             originalCookingDay: dayMeal.meal.originalCookingDay,
                             imageUrl: imageUrl,
                             recommendedCaloriesBeforeDinner: dayMeal.meal.recommendedCaloriesBeforeDinner,
+                            macros: dayMeal.meal.macros,
                             detailedIngredients: dayMeal.meal.detailedIngredients,
                             detailedInstructions: dayMeal.meal.detailedInstructions,
                             cookingTips: dayMeal.meal.cookingTips,

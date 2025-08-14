@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS public.meals (
     calories INTEGER DEFAULT 0 CHECK (calories >= 0),
     cook_time INTEGER DEFAULT 0 CHECK (cook_time >= 0), -- in minutes
     original_cooking_day TEXT, -- Day when meal was originally prepared (for batch cooking)
+    image_url TEXT, -- URL for AI-generated meal image
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -327,6 +328,7 @@ SELECT
     m.calories,
     m.cook_time,
     m.original_cooking_day,
+    m.image_url,
     array_agg(mi.ingredient ORDER BY mi.ingredient_order) FILTER (WHERE mi.ingredient IS NOT NULL) as ingredients,
     array_agg(mint.instruction ORDER BY mint.step_order) FILTER (WHERE mint.instruction IS NOT NULL) as instructions
 FROM public.meal_plans mp
@@ -338,7 +340,7 @@ GROUP BY
     mp.id, mp.user_id, mp.name, mp.week_start_date, mp.meal_preparation_style,
     mp.selected_cuisines, mp.meal_count, mp.is_active, mp.is_completed,
     mp.created_at, dm.id, dm.day_name, dm.day_order, m.id, m.name,
-    m.description, m.calories, m.cook_time, m.original_cooking_day
+    m.description, m.calories, m.cook_time, m.original_cooking_day, m.image_url
 ORDER BY mp.created_at DESC, dm.day_order;
 
 -- =============================================================================

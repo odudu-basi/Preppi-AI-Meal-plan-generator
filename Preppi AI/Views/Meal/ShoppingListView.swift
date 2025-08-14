@@ -2,8 +2,14 @@ import SwiftUI
 
 struct ShoppingListView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var databaseService = ShoppingListDatabaseService()
+    
+    let mealPlanId: UUID
+    
     @State private var shoppingList: [String: [String]] = [:]
     @State private var checkedItems: Set<String> = []
+    @State private var isLoading = true
+    @State private var errorMessage: String? = nil
     
     var body: some View {
         ZStack {
@@ -18,7 +24,9 @@ struct ShoppingListView: View {
             )
             .ignoresSafeArea()
             
-            if shoppingList.isEmpty {
+            if isLoading {
+                loadingView
+            } else if shoppingList.isEmpty {
                 emptyStateView
             } else {
                 ScrollView {
@@ -37,7 +45,9 @@ struct ShoppingListView: View {
                                 ShoppingCategorySection(
                                     category: category,
                                     items: items,
-                                    checkedItems: $checkedItems
+                                    checkedItems: $checkedItems,
+                                    mealPlanId: mealPlanId,
+                                    databaseService: databaseService
                                 )
                             }
                         }
@@ -69,7 +79,9 @@ struct ShoppingListView: View {
             
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Clear All") {
-                    checkedItems.removeAll()
+                    Task {
+                        await clearAllItems()
+                    }
                 }
                 .font(.body)
                 .fontWeight(.medium)
@@ -78,8 +90,25 @@ struct ShoppingListView: View {
             }
         }
         .onAppear {
-            loadShoppingList()
+            Task {
+                await loadShoppingListAndCheckedStates()
+            }
         }
+    }
+    
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .progressViewStyle(CircularProgressViewStyle(tint: .green))
+            
+            Text("Loading shopping list...")
+                .font(.body)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
     
     // MARK: - Empty State View
@@ -237,14 +266,88 @@ struct ShoppingListView: View {
     }
     
     // MARK: - Helper Functions
-    private func loadShoppingList() {
+    
+    /// Load shopping list structure and checked states from database
+    private func loadShoppingListAndCheckedStates() async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // First load the shopping list structure from UserDefaults (generated shopping list)
+            await loadShoppingListStructure()
+            
+            // If we have a shopping list, try to load or create database entries
+            if !shoppingList.isEmpty {
+                // Check if database items exist for this meal plan
+                let existingItems = try await databaseService.loadShoppingListItems(mealPlanId: mealPlanId)
+                
+                if existingItems.isEmpty {
+                    // No database items exist, create them from the shopping list structure
+                    await createDatabaseItemsFromShoppingList()
+                } else {
+                    // Load checked states from existing database items
+                    await loadCheckedStatesFromDatabase(existingItems)
+                }
+            }
+        } catch {
+            errorMessage = "Failed to load shopping list: \(error.localizedDescription)"
+            print("❌ Error loading shopping list: \(error)")
+        }
+        
+        isLoading = false
+    }
+    
+    /// Load shopping list structure from UserDefaults
+    private func loadShoppingListStructure() async {
         guard let shoppingListString = UserDefaults.standard.string(forKey: "weeklyShoppingList"),
               let data = shoppingListString.data(using: .utf8),
               let decodedList = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] else {
+            await MainActor.run {
+                shoppingList = [:]
+            }
             return
         }
         
-        shoppingList = decodedList
+        await MainActor.run {
+            shoppingList = decodedList
+        }
+    }
+    
+    /// Create database items from shopping list structure
+    private func createDatabaseItemsFromShoppingList() async {
+        do {
+            try await databaseService.saveShoppingListItems(
+                mealPlanId: mealPlanId,
+                shoppingList: shoppingList
+            )
+            print("✅ Created database items for shopping list")
+        } catch {
+            print("❌ Error creating database items: \(error)")
+        }
+    }
+    
+    /// Load checked states from database items
+    private func loadCheckedStatesFromDatabase(_ items: [DatabaseShoppingListItem]) async {
+        await MainActor.run {
+            checkedItems = Set(items.filter { $0.isChecked }.map { $0.itemName })
+            print("✅ Loaded \(checkedItems.count) checked items from database")
+        }
+    }
+    
+    /// Clear all checked items
+    private func clearAllItems() async {
+        do {
+            try await databaseService.clearAllCheckedItems(mealPlanId: mealPlanId)
+            await MainActor.run {
+                checkedItems.removeAll()
+            }
+            print("✅ Cleared all checked items")
+        } catch {
+            print("❌ Error clearing items: \(error)")
+            await MainActor.run {
+                errorMessage = "Failed to clear items: \(error.localizedDescription)"
+            }
+        }
     }
 }
 
@@ -254,6 +357,8 @@ struct ShoppingCategorySection: View {
     let category: String
     let items: [String]
     @Binding var checkedItems: Set<String>
+    let mealPlanId: UUID
+    let databaseService: ShoppingListDatabaseService
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -289,10 +394,8 @@ struct ShoppingCategorySection: View {
                         item: item,
                         isChecked: checkedItems.contains(item),
                         onToggle: {
-                            if checkedItems.contains(item) {
-                                checkedItems.remove(item)
-                            } else {
-                                checkedItems.insert(item)
+                            Task {
+                                await toggleItemCheckedState(item)
                             }
                         }
                     )
@@ -340,6 +443,33 @@ struct ShoppingCategorySection: View {
             return .gray
         }
     }
+    
+    /// Toggle item checked state and save to database
+    private func toggleItemCheckedState(_ item: String) async {
+        let newCheckedState = !checkedItems.contains(item)
+        
+        do {
+            // Update database first
+            try await databaseService.updateItemCheckedState(
+                mealPlanId: mealPlanId,
+                itemName: item,
+                isChecked: newCheckedState
+            )
+            
+            // Update local state on success
+            await MainActor.run {
+                if newCheckedState {
+                    checkedItems.insert(item)
+                } else {
+                    checkedItems.remove(item)
+                }
+            }
+            
+            print("✅ Toggled item '\(item)' to: \(newCheckedState)")
+        } catch {
+            print("❌ Error toggling item '\(item)': \(error)")
+        }
+    }
 }
 
 struct ShoppingItemRow: View {
@@ -378,6 +508,6 @@ struct ShoppingItemRow: View {
 
 #Preview {
     NavigationView {
-        ShoppingListView()
+        ShoppingListView(mealPlanId: UUID())
     }
 }
