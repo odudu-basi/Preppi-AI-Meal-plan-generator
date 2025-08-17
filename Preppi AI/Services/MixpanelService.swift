@@ -86,6 +86,9 @@ extension MixpanelService {
         static let dietaryRestrictionsSet = "Dietary Restrictions Set"
         static let physicalStatsSet = "Physical Stats Set"
         static let cookingPreferencesSet = "Cooking Preferences Set"
+        
+        // Meal Button Interactions
+        static let mealButtonTapped = "Meal Button Tapped"
     }
 }
 
@@ -104,6 +107,7 @@ extension MixpanelService {
         static let mealName = "meal_name"
         static let cookTime = "cook_time"
         static let calories = "calories"
+        static let mealType = "meal_type"
         
         // Onboarding Properties
         static let onboardingStep = "onboarding_step"
