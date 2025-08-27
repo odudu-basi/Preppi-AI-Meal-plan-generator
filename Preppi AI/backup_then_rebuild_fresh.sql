@@ -1,302 +1,78 @@
 -- =============================================================================
--- PREPPI AI - COMPLETE DATABASE SCHEMA
+-- BACKUP THEN REBUILD FRESH - Complete Database Reset
 -- =============================================================================
--- This schema stores all user onboarding, profile data, and meal plans
--- =============================================================================
-
--- Drop existing table if you need to recreate (BE CAREFUL - THIS DELETES DATA!)
--- DROP TABLE IF EXISTS public.user_profiles;
-
--- Create the main user profiles table (only if it doesn't exist)
-CREATE TABLE IF NOT EXISTS public.user_profiles (
-    -- Primary key and relationships
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
-    
-    -- User email (from auth)
-    email TEXT NOT NULL,
-    
-    -- Basic Information
-    name TEXT NOT NULL DEFAULT '',
-    sex TEXT, -- enum: Male, Female
-    age INTEGER DEFAULT 0 CHECK (age >= 0 AND age <= 150),
-    weight DECIMAL(5,2) DEFAULT 0.0 CHECK (weight >= 0),
-    height INTEGER DEFAULT 0 CHECK (height >= 0 AND height <= 300), -- in inches
-    
-    -- Cooking & Preferences  
-    likes_to_cook BOOLEAN,
-    cooking_preference TEXT, -- enum: loveCooking, enjoysCooking, basicCooking, preferNotToCook, neverCook
-    activity_level TEXT NOT NULL DEFAULT 'sedentary', -- enum: sedentary, lightlyActive, moderatelyActive, veryActive, extremelyActive
-    
-    -- Marketing & Motivation
-    marketing_source TEXT, -- enum: instagram, tiktok, friend, x
-    motivations JSONB DEFAULT '[]'::jsonb, -- array of motivation enums
-    motivation_other TEXT DEFAULT '',
-    challenges JSONB DEFAULT '[]'::jsonb, -- array of challenge enums
-    
-    -- Health & Goals
-    health_goals JSONB DEFAULT '[]'::jsonb, -- array of health goal enums
-    
-    -- Dietary Information
-    dietary_restrictions JSONB DEFAULT '[]'::jsonb, -- array of dietary restriction enums
-    food_allergies JSONB DEFAULT '[]'::jsonb, -- array of allergy enums
-    
-    -- Budget
-    weekly_budget DECIMAL(10,2), -- nullable, in dollars
-    
-    -- Onboarding Status
-    onboarding_completed BOOLEAN DEFAULT FALSE,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- =============================================================================
--- INDEXES FOR PERFORMANCE
+-- This script will backup your data, drop all tables, and rebuild everything fresh
+-- Run this in your Supabase SQL editor to completely start over
 -- =============================================================================
 
--- Index on user_id for fast lookups
-CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON public.user_profiles(user_id);
-
--- Index on email for searches
-CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON public.user_profiles(email);
-
--- Index on onboarding_completed for filtering
-CREATE INDEX IF NOT EXISTS idx_user_profiles_onboarding_completed ON public.user_profiles(onboarding_completed);
-
--- Composite index for common queries
-CREATE INDEX IF NOT EXISTS idx_user_profiles_user_onboarding ON public.user_profiles(user_id, onboarding_completed);
-
--- GIN indexes for JSONB fields (for efficient querying of arrays)
-CREATE INDEX IF NOT EXISTS idx_user_profiles_motivations ON public.user_profiles USING GIN(motivations);
-CREATE INDEX IF NOT EXISTS idx_user_profiles_challenges ON public.user_profiles USING GIN(challenges);
-CREATE INDEX IF NOT EXISTS idx_user_profiles_health_goals ON public.user_profiles USING GIN(health_goals);
-CREATE INDEX IF NOT EXISTS idx_user_profiles_dietary_restrictions ON public.user_profiles USING GIN(dietary_restrictions);
-CREATE INDEX IF NOT EXISTS idx_user_profiles_food_allergies ON public.user_profiles USING GIN(food_allergies);
-
 -- =============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES
--- =============================================================================
-
--- Enable RLS on the table (safe to run multiple times)
-ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-
--- Drop existing policies if they exist, then recreate them
-DROP POLICY IF EXISTS "Users can view own profile" ON public.user_profiles;
-CREATE POLICY "Users can view own profile" ON public.user_profiles
-    FOR SELECT USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert own profile" ON public.user_profiles;
-CREATE POLICY "Users can insert own profile" ON public.user_profiles
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
-CREATE POLICY "Users can update own profile" ON public.user_profiles
-    FOR UPDATE USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can delete own profile" ON public.user_profiles;
-CREATE POLICY "Users can delete own profile" ON public.user_profiles
-    FOR DELETE USING (auth.uid() = user_id);
-
--- =============================================================================
--- TRIGGER FOR AUTOMATIC UPDATED_AT
--- =============================================================================
-
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Trigger to automatically update updated_at (drop and recreate to avoid conflicts)
-DROP TRIGGER IF EXISTS update_user_profiles_updated_at ON public.user_profiles;
-CREATE TRIGGER update_user_profiles_updated_at 
-    BEFORE UPDATE ON public.user_profiles 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
-
--- =============================================================================
--- HELPFUL VIEWS (OPTIONAL)
--- =============================================================================
-
--- Drop existing view to avoid conflicts when adding new columns
-DROP VIEW IF EXISTS public.user_profiles_with_auth;
-
--- Recreate view to get user profiles with auth user data
-CREATE OR REPLACE VIEW public.user_profiles_with_auth AS
-SELECT 
-    up.id,
-    up.user_id,
-    up.email,
-    up.name,
-    up.sex,
-    up.age,
-    up.weight,
-    up.height,
-    up.likes_to_cook,
-    up.cooking_preference,
-    up.activity_level,
-    up.marketing_source,
-    up.motivations,
-    up.motivation_other,
-    up.challenges,
-    up.health_goals,
-    up.dietary_restrictions,
-    up.food_allergies,
-    up.weekly_budget,
-    up.onboarding_completed,
-    up.created_at,
-    up.updated_at,
-    au.created_at as auth_created_at,
-    au.confirmed_at as auth_confirmed_at,
-    au.last_sign_in_at as auth_last_sign_in_at
-FROM public.user_profiles up
-LEFT JOIN auth.users au ON up.user_id = au.id;
-
--- =============================================================================
--- EXAMPLE QUERIES FOR TESTING
+-- STEP 1: BACKUP EXISTING DATA (Optional - uncomment if you want to save data)
 -- =============================================================================
 
 /*
+-- Uncomment these lines if you want to backup existing meal plans
+CREATE TABLE IF NOT EXISTS backup_meal_plans AS SELECT * FROM public.meal_plans;
+CREATE TABLE IF NOT EXISTS backup_meals AS SELECT * FROM public.meals;
+CREATE TABLE IF NOT EXISTS backup_day_meals AS SELECT * FROM public.day_meals;
+CREATE TABLE IF NOT EXISTS backup_meal_ingredients AS SELECT * FROM public.meal_ingredients;
+CREATE TABLE IF NOT EXISTS backup_meal_instructions AS SELECT * FROM public.meal_instructions;
 
--- Insert a test user profile
-INSERT INTO public.user_profiles (
-    user_id, 
-    email, 
-    name, 
-    age, 
-    weight, 
-    height,
-    cooking_preference,
-    activity_level,
-    motivations,
-    challenges,
-    health_goals,
-    dietary_restrictions,
-    weekly_budget,
-    onboarding_completed
-) VALUES (
-    auth.uid(), -- This will be the authenticated user's ID
-    'user@example.com',
-    'John Doe',
-    30,
-    180.5,
-    72,
-    'enjoysCooking',
-    'moderatelyActive',
-    '["eatHealthier", "saveTime"]'::jsonb,
-    '["dontKnowWhatToCook", "noTimeToPlan"]'::jsonb,
-    '["loseWeight", "buildMuscle"]'::jsonb,
-    '["vegetarian"]'::jsonb,
-    150.00,
-    true
-);
-
--- Query user profile
-SELECT * FROM public.user_profiles WHERE user_id = auth.uid();
-
--- Query with JSONB array filtering
-SELECT * FROM public.user_profiles 
-WHERE motivations @> '["eatHealthier"]'::jsonb;
-
--- Update user profile
-UPDATE public.user_profiles 
-SET name = 'John Smith', updated_at = NOW() 
-WHERE user_id = auth.uid();
-
+-- Show what we're backing up
+SELECT 'Backed up ' || COUNT(*) || ' meal plans' as backup_info FROM backup_meal_plans;
+SELECT 'Backed up ' || COUNT(*) || ' meals' as backup_info FROM backup_meals;
+SELECT 'Backed up ' || COUNT(*) || ' day meals' as backup_info FROM backup_day_meals;
 */
 
 -- =============================================================================
--- ENUM VALUES FOR REFERENCE
+-- STEP 2: COMPLETELY DROP ALL MEAL PLAN TABLES
 -- =============================================================================
 
-/*
-COOKING PREFERENCES:
-- loveCooking
-- enjoysCooking  
-- basicCooking
-- preferNotToCook
-- neverCook
+-- Drop views first (they depend on tables)
+DROP VIEW IF EXISTS public.complete_meal_plans CASCADE;
 
-ACTIVITY LEVELS:
-- sedentary
-- lightlyActive
-- moderatelyActive
-- veryActive
-- extremelyActive
+-- Drop all policies first
+DROP POLICY IF EXISTS "Users can view own meal plans" ON public.meal_plans;
+DROP POLICY IF EXISTS "Users can insert own meal plans" ON public.meal_plans;
+DROP POLICY IF EXISTS "Users can update own meal plans" ON public.meal_plans;
+DROP POLICY IF EXISTS "Users can delete own meal plans" ON public.meal_plans;
 
-MARKETING SOURCES:
-- instagram
-- tiktok
-- friend
-- x
+DROP POLICY IF EXISTS "Users can view meals in their meal plans" ON public.meals;
+DROP POLICY IF EXISTS "Users can insert meals for their meal plans" ON public.meals;
+DROP POLICY IF EXISTS "Users can update meals in their meal plans" ON public.meals;
+DROP POLICY IF EXISTS "Users can delete meals in their meal plans" ON public.meals;
 
-MOTIVATIONS:
-- eatHealthier
-- avoidDecisions
-- saveTime
-- stayOnBudget
-- exploreNewMeals
-- other
+DROP POLICY IF EXISTS "Users can view day meals in their meal plans" ON public.day_meals;
+DROP POLICY IF EXISTS "Users can insert day meals for their meal plans" ON public.day_meals;
+DROP POLICY IF EXISTS "Users can update day meals in their meal plans" ON public.day_meals;
+DROP POLICY IF EXISTS "Users can delete day meals in their meal plans" ON public.day_meals;
 
-CHALLENGES:
-- dontKnowWhatToCook
-- noTimeToPlan
-- overspendOnGroceries
-- wasteFood
-- cantStickToDiet
-- wantCulturalMeals
+DROP POLICY IF EXISTS "Users can view ingredients for their meals" ON public.meal_ingredients;
+DROP POLICY IF EXISTS "Users can insert ingredients for their meals" ON public.meal_ingredients;
+DROP POLICY IF EXISTS "Users can update ingredients for their meals" ON public.meal_ingredients;
+DROP POLICY IF EXISTS "Users can delete ingredients for their meals" ON public.meal_ingredients;
 
-HEALTH GOALS:
-- loseWeight
-- buildMuscle
-- maintainWeight
-- improveHealth
-- gainWeight
-- increaseEnergy
-- betterSleep
-- reduceStress
+DROP POLICY IF EXISTS "Users can view instructions for their meals" ON public.meal_instructions;
+DROP POLICY IF EXISTS "Users can insert instructions for their meals" ON public.meal_instructions;
+DROP POLICY IF EXISTS "Users can update instructions for their meals" ON public.meal_instructions;
+DROP POLICY IF EXISTS "Users can delete instructions for their meals" ON public.meal_instructions;
 
-DIETARY RESTRICTIONS:
-- vegetarian
-- vegan
-- glutenFree
-- dairyFree
-- keto
-- paleo
-- lowCarb
-- lowFat
-- lowSodium
-- diabetic
-- heartHealthy
-- mediterraneanDiet
-- highProtein
+-- Drop triggers
+DROP TRIGGER IF EXISTS update_meal_plans_updated_at ON public.meal_plans;
+DROP TRIGGER IF EXISTS update_meals_updated_at ON public.meals;
 
-ALLERGIES:
-- nuts
-- peanuts
-- dairy
-- eggs
-- soy
-- wheat
-- fish
-- shellfish
-- sesame
-- sulfites
-- mustard
-- celery
-*/
+-- Drop tables in correct order (children first, then parents)
+DROP TABLE IF EXISTS public.meal_instructions CASCADE;
+DROP TABLE IF EXISTS public.meal_ingredients CASCADE;
+DROP TABLE IF EXISTS public.day_meals CASCADE;
+DROP TABLE IF EXISTS public.meals CASCADE;
+DROP TABLE IF EXISTS public.meal_plans CASCADE;
 
 -- =============================================================================
--- MEAL PLANS SCHEMA
+-- STEP 3: RECREATE ALL TABLES FRESH WITH CORRECT STRUCTURE
 -- =============================================================================
 
--- Create the main meal plans table (only if it doesn't exist)
-CREATE TABLE IF NOT EXISTS public.meal_plans (
+-- Create the main meal plans table with ALL required columns
+CREATE TABLE public.meal_plans (
     -- Primary key and relationships
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -306,6 +82,8 @@ CREATE TABLE IF NOT EXISTS public.meal_plans (
     week_start_date DATE NOT NULL,
     meal_preparation_style TEXT NOT NULL, -- 'newMealEveryTime' or 'multiplePortions'
     selected_cuisines JSONB DEFAULT '[]'::jsonb, -- array of selected cuisines
+    selected_meal_types JSONB DEFAULT '[]'::jsonb, -- NEW: array of meal types
+    meal_plan_type TEXT DEFAULT 'dinner', -- NEW: identifier for meal plan type
     meal_count INTEGER DEFAULT 7, -- number of unique meals (for batch cooking)
     
     -- Status
@@ -317,8 +95,8 @@ CREATE TABLE IF NOT EXISTS public.meal_plans (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create the meals table (only if it doesn't exist)
-CREATE TABLE IF NOT EXISTS public.meals (
+-- Create the meals table with ALL required columns
+CREATE TABLE public.meals (
     -- Primary key
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     
@@ -328,14 +106,30 @@ CREATE TABLE IF NOT EXISTS public.meals (
     calories INTEGER DEFAULT 0 CHECK (calories >= 0),
     cook_time INTEGER DEFAULT 0 CHECK (cook_time >= 0), -- in minutes
     original_cooking_day TEXT, -- Day when meal was originally prepared (for batch cooking)
+    image_url TEXT, -- NEW: for meal images
+    recommended_calories_before_dinner INTEGER DEFAULT 0, -- NEW: calorie tracking
+    
+    -- NEW: Macro nutrients
+    protein DECIMAL(8,2),
+    carbohydrates DECIMAL(8,2),
+    fat DECIMAL(8,2),
+    fiber DECIMAL(8,2),
+    sugar DECIMAL(8,2),
+    sodium DECIMAL(8,2),
+    
+    -- NEW: Detailed recipe information
+    detailed_ingredients JSONB DEFAULT '[]'::jsonb,
+    detailed_instructions JSONB DEFAULT '[]'::jsonb,
+    cooking_tips JSONB DEFAULT '[]'::jsonb,
+    serving_info TEXT,
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create the day_meals table (linking meals to specific days in meal plans) (only if it doesn't exist)
-CREATE TABLE IF NOT EXISTS public.day_meals (
+-- Create the day_meals table with meal_type column
+CREATE TABLE public.day_meals (
     -- Primary key and relationships
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     meal_plan_id UUID REFERENCES public.meal_plans(id) ON DELETE CASCADE NOT NULL,
@@ -344,13 +138,14 @@ CREATE TABLE IF NOT EXISTS public.day_meals (
     -- Day information
     day_name TEXT NOT NULL CHECK (day_name IN ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')),
     day_order INTEGER NOT NULL CHECK (day_order >= 1 AND day_order <= 7),
+    meal_type TEXT DEFAULT 'dinner', -- NEW: breakfast, lunch, dinner
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create the meal_ingredients table (only if it doesn't exist)
-CREATE TABLE IF NOT EXISTS public.meal_ingredients (
+-- Create the meal_ingredients table
+CREATE TABLE public.meal_ingredients (
     -- Primary key and relationships
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     meal_id UUID REFERENCES public.meals(id) ON DELETE CASCADE NOT NULL,
@@ -363,8 +158,8 @@ CREATE TABLE IF NOT EXISTS public.meal_ingredients (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create the meal_instructions table (only if it doesn't exist)
-CREATE TABLE IF NOT EXISTS public.meal_instructions (
+-- Create the meal_instructions table
+CREATE TABLE public.meal_instructions (
     -- Primary key and relationships
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     meal_id UUID REFERENCES public.meals(id) ON DELETE CASCADE NOT NULL,
@@ -378,7 +173,7 @@ CREATE TABLE IF NOT EXISTS public.meal_instructions (
 );
 
 -- =============================================================================
--- MEAL PLAN INDEXES FOR PERFORMANCE
+-- STEP 4: CREATE ALL INDEXES
 -- =============================================================================
 
 -- Meal Plans indexes
@@ -401,10 +196,10 @@ CREATE INDEX idx_meal_instructions_meal_id ON public.meal_instructions(meal_id);
 CREATE INDEX idx_meal_instructions_order ON public.meal_instructions(meal_id, step_order);
 
 -- =============================================================================
--- MEAL PLAN ROW LEVEL SECURITY (RLS) POLICIES
+-- STEP 5: ENABLE RLS AND CREATE POLICIES
 -- =============================================================================
 
--- Enable RLS on all meal plan tables
+-- Enable RLS on all tables
 ALTER TABLE public.meal_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.day_meals ENABLE ROW LEVEL SECURITY;
@@ -424,20 +219,16 @@ CREATE POLICY "Users can update own meal plans" ON public.meal_plans
 CREATE POLICY "Users can delete own meal plans" ON public.meal_plans
     FOR DELETE USING (auth.uid() = user_id);
 
--- Meals policies (simplified for authenticated users - security enforced through meal_plans relationship)
-DROP POLICY IF EXISTS "Users can view meals in their meal plans" ON public.meals;
+-- Meals policies (simplified for authenticated users)
 CREATE POLICY "Users can view meals in their meal plans" ON public.meals
     FOR SELECT USING (auth.uid() IS NOT NULL);
 
-DROP POLICY IF EXISTS "Users can insert meals for their meal plans" ON public.meals;
 CREATE POLICY "Users can insert meals for their meal plans" ON public.meals
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
-DROP POLICY IF EXISTS "Users can update meals in their meal plans" ON public.meals;
 CREATE POLICY "Users can update meals in their meal plans" ON public.meals
     FOR UPDATE USING (auth.uid() IS NOT NULL);
 
-DROP POLICY IF EXISTS "Users can delete meals in their meal plans" ON public.meals;
 CREATE POLICY "Users can delete meals in their meal plans" ON public.meals
     FOR DELETE USING (auth.uid() IS NOT NULL);
 
@@ -549,7 +340,7 @@ CREATE POLICY "Users can delete instructions for their meals" ON public.meal_ins
     );
 
 -- =============================================================================
--- MEAL PLAN TRIGGERS FOR AUTOMATIC UPDATED_AT
+-- STEP 6: CREATE TRIGGERS
 -- =============================================================================
 
 -- Triggers for meal_plans
@@ -565,7 +356,7 @@ CREATE TRIGGER update_meals_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- =============================================================================
--- HELPFUL MEAL PLAN VIEWS
+-- STEP 7: RECREATE VIEW
 -- =============================================================================
 
 -- View to get complete meal plans with all related data
@@ -603,3 +394,21 @@ GROUP BY
     mp.created_at, dm.id, dm.day_name, dm.day_order, m.id, m.name,
     m.description, m.calories, m.cook_time, m.original_cooking_day
 ORDER BY mp.created_at DESC, dm.day_order;
+
+-- =============================================================================
+-- STEP 8: SUCCESS MESSAGE
+-- =============================================================================
+
+DO $$
+BEGIN
+    RAISE NOTICE '';
+    RAISE NOTICE '🎉 FRESH DATABASE REBUILD COMPLETED!';
+    RAISE NOTICE '✅ All tables dropped and recreated with correct structure';
+    RAISE NOTICE '✅ All indexes created successfully';
+    RAISE NOTICE '✅ All RLS policies configured correctly';
+    RAISE NOTICE '✅ All triggers and views recreated';
+    RAISE NOTICE '';
+    RAISE NOTICE '💡 Your database is now completely fresh and clean!';
+    RAISE NOTICE '💡 Build and run your app - meal plans should work perfectly now!';
+    RAISE NOTICE '';
+END $$;

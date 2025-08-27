@@ -22,7 +22,7 @@ struct SplashScreenView: View {
                 colors: [
                     Color.green.opacity(0.8),
                     Color.green.opacity(0.6),
-                    Color(.systemBackground)
+                    Color("AppBackground")
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

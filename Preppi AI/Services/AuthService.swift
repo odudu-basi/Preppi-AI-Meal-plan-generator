@@ -162,12 +162,51 @@ class AuthService: ObservableObject {
             self.isAuthenticated = false
             print("✅ Sign out successful")
             
+            // Clear all user-specific data from UserDefaults
+            await clearUserDefaultsData()
+            
         } catch {
             self.errorMessage = "Sign out failed: \(error.localizedDescription)"
             print("❌ Sign out error: \(error)")
         }
         
         isLoading = false
+    }
+    
+    /// Clear all user-specific data from UserDefaults when signing out
+    private func clearUserDefaultsData() async {
+        print("🧹 Clearing user-specific data from UserDefaults...")
+        
+        // Get all UserDefaults keys
+        let allKeys = UserDefaults.standard.dictionaryRepresentation().keys
+        
+        // Clear ALL shopping list related keys (both old and new format)
+        let shoppingListKeys = allKeys.filter { key in
+            key.hasPrefix("weeklyShoppingList_") || 
+            key.hasPrefix("user_") ||
+            key.hasPrefix("mealPlan_") ||
+            key.hasPrefix("shoppingList_")
+        }
+        
+        for key in shoppingListKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+            print("🗑️ Cleared UserDefaults key: \(key)")
+        }
+        
+        // Clear other user-specific keys (keep app-wide settings)
+        let userSpecificKeys = allKeys.filter { key in
+            key.hasPrefix("userProfile_") ||
+            key.hasPrefix("onboarding_") ||
+            key.hasPrefix("preferences_")
+        }
+        
+        for key in userSpecificKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+            print("🗑️ Cleared UserDefaults key: \(key)")
+        }
+        
+        // Keep essential app keys like "hasSeenGetStarted"
+        print("✅ UserDefaults cleanup completed - cleared \(shoppingListKeys.count) shopping list keys and \(userSpecificKeys.count) user profile keys")
     }
     
     // MARK: - Password Reset

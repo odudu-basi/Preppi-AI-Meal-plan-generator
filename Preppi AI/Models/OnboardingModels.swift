@@ -10,6 +10,7 @@ import Foundation
 // MARK: - User Data Models
 struct UserOnboardingData: Equatable {
     var name: String = ""
+    var sex: Sex? = nil
     var likesToCook: Bool? = nil
     var cookingPreference: CookingPreference? = nil
     var marketingSource: MarketingSource? = nil
@@ -29,6 +30,38 @@ struct UserOnboardingData: Equatable {
 
 
 // MARK: - Enums
+
+enum Sex: String, CaseIterable, Identifiable, Codable {
+    case male = "Male"
+    case female = "Female"
+    
+    var id: String { self.rawValue }
+    
+    var emoji: String {
+        switch self {
+        case .male: return "👨"
+        case .female: return "👩"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .male: return "person.fill"
+        case .female: return "person.fill"
+        }
+    }
+    
+    var title: String {
+        return self.rawValue
+    }
+    
+    var description: String {
+        switch self {
+        case .male: return "Male"
+        case .female: return "Female"
+        }
+    }
+}
 
 enum CookingPreference: String, CaseIterable, Identifiable, Codable {
     case loveCooking = "I love cooking!"
@@ -199,6 +232,7 @@ enum DietaryRestriction: String, CaseIterable, Identifiable, Codable {
     case diabetic = "Diabetic-Friendly"
     case heartHealthy = "Heart Healthy"
     case mediterraneanDiet = "Mediterranean Diet"
+    case highProtein = "High Protein"
     
     var id: String { self.rawValue }
     
@@ -216,6 +250,7 @@ enum DietaryRestriction: String, CaseIterable, Identifiable, Codable {
         case .diabetic: return "📊"
         case .heartHealthy: return "❤️"
         case .mediterraneanDiet: return "🫒"
+        case .highProtein: return "💪"
         }
     }
 }

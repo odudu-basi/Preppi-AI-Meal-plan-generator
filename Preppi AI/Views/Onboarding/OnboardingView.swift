@@ -36,6 +36,8 @@ struct OnboardingView: View {
                             switch coordinator.currentStep {
                             case .name:
                                 NameInputView(coordinator: coordinator)
+                            case .sex:
+                                SexSelectionView(coordinator: coordinator)
                             case .cookingPreference:
                                 CookingPreferenceView(coordinator: coordinator)
                             case .marketing:

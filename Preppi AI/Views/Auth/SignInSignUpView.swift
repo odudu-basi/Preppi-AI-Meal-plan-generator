@@ -7,14 +7,24 @@
 
 import SwiftUI
 
+enum AuthMode {
+    case signIn
+    case signUp
+}
+
 struct SignInSignUpView: View {
     @StateObject private var authService = AuthService.shared
-    @State private var isSignUpMode = false
+    @State private var isSignUpMode: Bool
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var showForgotPassword = false
     @State private var animateContent = false
+    
+    // Initializer to support setting initial mode
+    init(initialMode: AuthMode = .signIn) {
+        _isSignUpMode = State(initialValue: initialMode == .signUp)
+    }
     
     var body: some View {
         GeometryReader { geometry in

@@ -84,6 +84,7 @@ class LocalUserDataService: ObservableObject {
                 userId: userId.uuidString,
                 email: userEmail,
                 name: userData.name,
+                sex: userData.sex?.rawValue,
                 age: userData.age,
                 weight: userData.weight,
                 height: userData.height,
@@ -503,6 +504,7 @@ struct UserProfileData: Codable {
 extension UserOnboardingData: Codable {
     enum CodingKeys: String, CodingKey {
         case name
+        case sex
         case likesToCook
         case cookingPreference
         case marketingSource
@@ -523,6 +525,7 @@ extension UserOnboardingData: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
         name = try container.decode(String.self, forKey: .name)
+        sex = try container.decodeIfPresent(Sex.self, forKey: .sex)
         likesToCook = try container.decodeIfPresent(Bool.self, forKey: .likesToCook)
         cookingPreference = try container.decodeIfPresent(CookingPreference.self, forKey: .cookingPreference)
         marketingSource = try container.decodeIfPresent(MarketingSource.self, forKey: .marketingSource)
@@ -543,6 +546,7 @@ extension UserOnboardingData: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         
         try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(sex, forKey: .sex)
         try container.encodeIfPresent(likesToCook, forKey: .likesToCook)
         try container.encodeIfPresent(cookingPreference, forKey: .cookingPreference)
         try container.encodeIfPresent(marketingSource, forKey: .marketingSource)
@@ -614,6 +618,7 @@ struct UserProfileUpdate: Codable {
     let userId: String
     let email: String
     let name: String
+    let sex: String?
     let age: Int
     let weight: Double
     let height: Int
@@ -635,6 +640,7 @@ struct UserProfileUpdate: Codable {
         case userId = "user_id"
         case email
         case name
+        case sex
         case age
         case weight
         case height

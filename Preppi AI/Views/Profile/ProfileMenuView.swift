@@ -13,7 +13,7 @@ struct ProfileMenuView: View {
                 // Background gradient
                 LinearGradient(
                     colors: [
-                        Color(.systemBackground),
+                        Color("AppBackground"),
                         Color(.systemGray6).opacity(0.3)
                     ],
                     startPoint: .top,
@@ -37,14 +37,6 @@ struct ProfileMenuView: View {
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.primary)
-                }
-            }
         }
         .sheet(isPresented: $showingProfileEdit) {
             ProfileView(userData: appState.userData)

@@ -20,6 +20,17 @@ class CalorieCalculationService {
         return caloriesBeforeDinner
     }
     
+    /// Calculate total daily calorie goal based on user data and goals
+    func calculateDailyCalorieGoal(for userData: UserOnboardingData) -> Int {
+        // Calculate Total Daily Energy Expenditure (TDEE)
+        let tdee = calculateTDEE(for: userData)
+        
+        // Adjust based on health goals
+        let adjustedTotalCalories = adjustCaloriesForGoals(tdee: tdee, healthGoals: userData.healthGoals)
+        
+        return Int(adjustedTotalCalories)
+    }
+    
     private func calculateTDEE(for userData: UserOnboardingData) -> Double {
         // First calculate BMR (Basal Metabolic Rate) using Mifflin-St Jeor Equation
         // Since we don't have gender data, we'll use a neutral approach or estimate
@@ -112,5 +123,38 @@ class CalorieCalculationService {
         
         // Default to maintain weight if no goals specified
         return .maintainWeight
+    }
+    
+    /// Calculate personalized calorie range for a specific meal type based on user's profile and goals
+    func calculateMealCalorieRange(for userData: UserOnboardingData, mealType: String) -> String {
+        let totalDailyCalories = Double(calculateDailyCalorieGoal(for: userData))
+        
+        // Define typical meal distribution percentages
+        let mealPercentages: (min: Double, max: Double) = {
+            switch mealType.lowercased() {
+            case "breakfast":
+                // Breakfast: 20-25% of daily calories
+                return (0.20, 0.25)
+            case "lunch":
+                // Lunch: 25-30% of daily calories
+                return (0.25, 0.30)
+            case "dinner":
+                // Dinner: 30-35% of daily calories
+                return (0.30, 0.35)
+            default:
+                // Default fallback
+                return (0.25, 0.30)
+            }
+        }()
+        
+        // Calculate calorie range for this meal type
+        let minCalories = Int(totalDailyCalories * mealPercentages.min)
+        let maxCalories = Int(totalDailyCalories * mealPercentages.max)
+        
+        // Ensure reasonable minimums based on meal type
+        let adjustedMin = max(minCalories, mealType.lowercased() == "breakfast" ? 250 : (mealType.lowercased() == "lunch" ? 350 : 400))
+        let adjustedMax = max(maxCalories, adjustedMin + 100)
+        
+        return "\(adjustedMin)-\(adjustedMax)"
     }
 }

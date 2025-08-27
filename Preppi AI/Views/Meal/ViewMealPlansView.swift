@@ -18,7 +18,7 @@ struct ViewMealPlansView: View {
                 // Background gradient
                 LinearGradient(
                     colors: [
-                        Color(.systemBackground),
+                        Color("AppBackground"),
                         Color(.systemGray6).opacity(0.3)
                     ],
                     startPoint: .top,
@@ -295,13 +295,26 @@ struct MealPlanDetailView: View {
     private let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     private let weekdayIcons = ["🌟", "⚡", "🔥", "💪", "🎯", "🌈", "✨"]
     
+    // MARK: - Helper Functions
+    
+    /// Generate a week identifier from a given date (format: yyyy-MM-dd for week start)
+    private func getWeekIdentifier(for date: Date) -> String {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday is first day
+        
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: weekStart)
+    }
+    
     var body: some View {
         NavigationView {
             ZStack {
                 // Background gradient
                 LinearGradient(
                     colors: [
-                        Color(.systemBackground),
+                        Color("AppBackground"),
                         Color(.systemGray6).opacity(0.3)
                     ],
                     startPoint: .top,
@@ -321,17 +334,15 @@ struct MealPlanDetailView: View {
             }
             .navigationTitle(mealPlan.name)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingShoppingList = true
-                    } label: {
-                        Image(systemName: "cart.fill")
-                            .font(.title3)
-                            .foregroundColor(.green)
-                    }
+            .navigationBarItems(trailing:
+                Button {
+                    showingShoppingList = true
+                } label: {
+                    Image(systemName: "cart.fill")
+                        .font(.title3)
+                        .foregroundColor(.green)
                 }
-            }
+            )
         }
         .onAppear {
             loadMealPlanDetails()
@@ -348,7 +359,8 @@ struct MealPlanDetailView: View {
         .sheet(isPresented: $showingShoppingList) {
             NavigationView {
                 if let mealPlanId = mealPlan.id {
-                    ShoppingListView(mealPlanId: mealPlanId)
+                    let weekDate = ISO8601DateFormatter().date(from: mealPlan.weekStartDate) ?? Date()
+                    ShoppingListView(mealPlanId: mealPlanId, weekIdentifier: getWeekIdentifier(for: weekDate))
                 } else {
                     Text("Error: Meal plan ID not available")
                         .foregroundColor(.red)
@@ -569,79 +581,8 @@ struct MealPlanDetailView: View {
                     }
                 }
                 
-                // Daily Calories Section
+                // Daily Nutritional Breakdown Section
                 VStack(spacing: 16) {
-                    HStack {
-                        Image(systemName: "target")
-                            .font(.title3)
-                            .foregroundColor(.blue)
-                        
-                        Text("Daily Nutrition Goal")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                    }
-                    
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Recommended calories before dinner")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 4) {
-                                Text("\(dayMeal.meal.recommendedCaloriesBeforeDinner)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.blue)
-                                
-                                Text("calories")
-                                    .font(.subheadline)
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Dinner calories")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 4) {
-                                Text("\(dayMeal.meal.calories)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.orange)
-                                
-                                Text("calories")
-                                    .font(.subheadline)
-                                    .foregroundColor(.orange)
-                            }
-                        }
-                    }
-                    
-                    // Total daily calories
-                    HStack {
-                        Text("Total Daily Target:")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                        
-                        HStack(spacing: 4) {
-                            Text("\(dayMeal.meal.recommendedCaloriesBeforeDinner + dayMeal.meal.calories)")
-                                .font(.headline)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                            
-                            Text("calories")
-                                .font(.subheadline)
-                                .foregroundColor(.green)
-                        }
-                    }
-                    
                     // Daily Nutritional Breakdown
                     if let macros = dayMeal.meal.macros {
                         VStack(spacing: 12) {

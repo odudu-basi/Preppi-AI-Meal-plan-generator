@@ -9,6 +9,8 @@ struct DatabaseMealPlan: Codable {
     let weekStartDate: String // ISO date string
     let mealPreparationStyle: String
     let selectedCuisines: [String]
+    let selectedMealTypes: [String] // New field for breakfast, lunch, dinner
+    let mealPlanType: String // Identifier: "breakfast", "lunch", or "dinner"
     let mealCount: Int
     let isActive: Bool
     let isCompleted: Bool
@@ -22,6 +24,8 @@ struct DatabaseMealPlan: Codable {
         case weekStartDate = "week_start_date"
         case mealPreparationStyle = "meal_preparation_style"
         case selectedCuisines = "selected_cuisines"
+        case selectedMealTypes = "selected_meal_types"
+        case mealPlanType = "meal_plan_type"
         case mealCount = "meal_count"
         case isActive = "is_active"
         case isCompleted = "is_completed"
@@ -82,6 +86,7 @@ struct DatabaseDayMeal: Codable {
     let mealId: UUID
     let dayName: String
     let dayOrder: Int
+    let mealType: String // New field for breakfast, lunch, dinner
     let createdAt: String?
     
     enum CodingKeys: String, CodingKey {
@@ -90,6 +95,7 @@ struct DatabaseDayMeal: Codable {
         case mealId = "meal_id"
         case dayName = "day_name"
         case dayOrder = "day_order"
+        case mealType = "meal_type"
         case createdAt = "created_at"
     }
 }
@@ -131,9 +137,10 @@ class MealPlanDatabaseService {
     static let shared = MealPlanDatabaseService()
     
     private let supabase = SupabaseService.shared
-    private let dateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone.current // Use local timezone for storing week dates
         return formatter
     }()
     
@@ -141,10 +148,12 @@ class MealPlanDatabaseService {
     
     // MARK: - Public Methods
     
+
     /// Save a complete meal plan to the database
     func saveMealPlan(
         dayMeals: [DayMeal],
         selectedCuisines: [String],
+        mealType: String = "dinner",
         mealPreparationStyle: MealPlanInfoView.MealPreparationStyle,
         mealCount: Int
     ) async throws -> UUID {
@@ -154,6 +163,11 @@ class MealPlanDatabaseService {
         
         let weekStartDate = getWeekStartDate()
         
+        // Debug logging for week calculation
+        print("🗓️ DEBUG: Creating meal plan for week starting: \(weekStartDate)")
+        print("🗓️ DEBUG: Formatted week start date: \(dateFormatter.string(from: weekStartDate))")
+        print("🗓️ DEBUG: Current date: \(Date())")
+        
         // Create the main meal plan record
         let mealPlan = DatabaseMealPlan(
             id: nil,
@@ -162,6 +176,8 @@ class MealPlanDatabaseService {
             weekStartDate: dateFormatter.string(from: weekStartDate),
             mealPreparationStyle: mealPreparationStyle.rawValue,
             selectedCuisines: selectedCuisines,
+            selectedMealTypes: [mealType], // Use the provided meal type
+            mealPlanType: mealType, // Set the identifier for this meal plan type
             mealCount: mealCount,
             isActive: true,
             isCompleted: false,
@@ -195,7 +211,7 @@ class MealPlanDatabaseService {
             }
             
             // Save all meals and create day_meals relationships
-            try await saveMealsForMealPlan(dayMeals: dayMeals, mealPlanId: mealPlanId)
+            try await saveMealsForMealPlan(dayMeals: dayMeals, mealPlanId: mealPlanId, mealType: mealType)
             
             // Track meal plan saved in Mixpanel
             MixpanelService.shared.track(
@@ -222,13 +238,22 @@ class MealPlanDatabaseService {
     
     /// Retrieve user's meal plans
     func getUserMealPlans() async throws -> [DatabaseMealPlan] {
+        // Get the current user's session to ensure we're authenticated
+        let session = try await supabase.auth.session
+        let userId = session.user.id
+        
+        print("🔍 Getting meal plans for user: \(userId)")
+        
         let response: [DatabaseMealPlan] = try await supabase.database
             .from("meal_plans")
             .select()
+            .eq("user_id", value: userId)  // Explicit user filtering - keep as UUID
             .eq("is_active", value: true)
             .order("created_at", ascending: false)
             .execute()
             .value
+        
+        print("📦 Found \(response.count) meal plans for user")
         
         return response
     }
@@ -264,9 +289,9 @@ class MealPlanDatabaseService {
             .value
     }
     
-    /// Delete a meal plan (sets is_active to false) and cleans up associated images
+    /// Delete a meal plan (sets is_active to false) and cleans up associated images and shopping list items
     func deleteMealPlan(mealPlanId: UUID) async throws {
-        print("🗑️ Starting meal plan deletion with image cleanup for: \(mealPlanId)")
+        print("🗑️ Starting meal plan deletion with full cleanup for: \(mealPlanId)")
         
         // Step 1: Get all meals in this meal plan to delete their images
         do {
@@ -297,18 +322,41 @@ class MealPlanDatabaseService {
             // Continue with meal plan deletion even if image cleanup fails
         }
         
+        // Step 2: Delete associated shopping list items
+        do {
+            try await deleteShoppingListItemsForMealPlan(mealPlanId: mealPlanId)
+            print("✅ Shopping list items deleted for meal plan: \(mealPlanId)")
+        } catch {
+            print("⚠️ Failed to delete shopping list items: \(error)")
+            // Continue with meal plan deletion even if shopping list cleanup fails
+        }
+        
         // Step 3: Soft delete the meal plan
         let update = ["is_active": false]
         
-        let _: DatabaseMealPlan = try await supabase.database
+        try await supabase.database
             .from("meal_plans")
             .update(update)
             .eq("id", value: mealPlanId.uuidString)
-            .single()
             .execute()
-            .value
         
         print("✅ Meal plan soft deleted: \(mealPlanId)")
+    }
+    
+    /// Delete all shopping list items associated with a meal plan
+    private func deleteShoppingListItemsForMealPlan(mealPlanId: UUID) async throws {
+        guard let userId = try await getCurrentUserId() else {
+            throw DatabaseError.userNotAuthenticated
+        }
+        
+        try await supabase.database
+            .from("shopping_list_items")
+            .delete()
+            .eq("user_id", value: userId.uuidString)
+            .eq("meal_plan_id", value: mealPlanId.uuidString)
+            .execute()
+        
+        print("✅ Deleted shopping list items for meal plan: \(mealPlanId)")
     }
     
     /// Update a meal's image URL
@@ -435,7 +483,7 @@ class MealPlanDatabaseService {
     
     // MARK: - Private Helper Methods
     
-    private func saveMealsForMealPlan(dayMeals: [DayMeal], mealPlanId: UUID) async throws {
+    private func saveMealsForMealPlan(dayMeals: [DayMeal], mealPlanId: UUID, mealType: String) async throws {
         for (index, dayMeal) in dayMeals.enumerated() {
             // Save the meal with preserved ID for image updates
             let databaseMeal = DatabaseMeal(
@@ -491,6 +539,7 @@ class MealPlanDatabaseService {
                 mealId: mealId,
                 dayName: dayMeal.day,
                 dayOrder: index + 1,
+                mealType: mealType, // Use the provided meal type
                 createdAt: nil
             )
             
@@ -666,11 +715,47 @@ class MealPlanDatabaseService {
     }
     
     private func getWeekStartDate() -> Date {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Ensure Sunday is the first day (consistent with ContentView)
+        calendar.timeZone = TimeZone.current // Use local timezone instead of UTC
+        
         let today = Date()
-        let weekday = calendar.component(.weekday, from: today)
-        let daysFromMonday = (weekday + 5) % 7 // Convert Sunday=1 to Monday=0 system
-        return calendar.date(byAdding: .day, value: -daysFromMonday, to: today) ?? today
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: today)?.start ?? today
+        
+        print("🌍 DEBUG: Using timezone: \(calendar.timeZone.identifier)")
+        print("🌍 DEBUG: Local today: \(today)")
+        print("🌍 DEBUG: Local week start: \(weekStart)")
+        
+        return weekStart
+    }
+    
+    /// Get the current authenticated user's ID
+    private func getCurrentUserId() async throws -> UUID? {
+        do {
+            let session = try await supabase.auth.session
+            return UUID(uuidString: session.user.id.uuidString)
+        } catch {
+            print("❌ Error getting current user: \(error)")
+            return nil
+        }
+    }
+    
+    /// Get all meal plans for the current user
+    func getAllMealPlans() async throws -> [DatabaseMealPlan] {
+        guard let userId = try await getCurrentUserId() else {
+            throw MealPlanDatabaseError.userNotAuthenticated
+        }
+        
+        let mealPlans: [DatabaseMealPlan] = try await supabase.database
+            .from("meal_plans")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .eq("is_active", value: true)
+            .execute()
+            .value
+        
+        print("📋 Found \(mealPlans.count) active meal plans for user")
+        return mealPlans
     }
 }
 

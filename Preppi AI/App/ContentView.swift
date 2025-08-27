@@ -52,6 +52,10 @@ struct ContentView: View {
                 SplashScreenView {
                     appState.showSplashScreen = false
                 }
+            } else if appState.shouldShowGetStarted {
+                // Show get started page for new users
+                GetStartedView()
+                    .environmentObject(appState)
             } else if appState.shouldShowAuth {
                 // Show authentication if not signed in
                 SignInSignUpView()
@@ -66,7 +70,7 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
+                .background(Color("AppBackground"))
             } else if appState.shouldShowOnboarding {
                 // Show onboarding if authenticated but not onboarded
                 OnboardingView()
@@ -90,7 +94,7 @@ struct ContentView: View {
                         .padding(.top)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
+                .background(Color("AppBackground"))
             }
         }
         .animation(.easeInOut(duration: 0.4), value: appState.isAuthenticated)
@@ -151,10 +155,24 @@ struct HomeView: View {
     @State private var breakfastMealPlanId: UUID?
     @State private var lunchMealPlanId: UUID?
     @State private var dinnerMealPlanId: UUID?
+    @State private var showingMealEditPopup = false
     
     // Performance optimization: Cache meal plans to avoid repeated database calls
     @State private var cachedMealPlans: [DatabaseMealPlan] = []
     @State private var lastMealPlansUpdate: Date = Date.distantPast
+    
+    // MARK: - Helper Functions
+    
+    /// Generate a week identifier from a given date (format: yyyy-MM-dd for week start)
+    private func getWeekIdentifier(for date: Date) -> String {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday is first day
+        
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: weekStart)
+    }
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -162,7 +180,7 @@ struct HomeView: View {
                 // Subtle vertical gradient background
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        Color(.systemBackground),
+                        Color("AppBackground"),
                         Color(.systemGray6).opacity(0.3)
                     ]),
                     startPoint: .top,
@@ -186,6 +204,30 @@ struct HomeView: View {
                         
                         // Bottom spacing
                         Color.clear.frame(height: 100)
+                    }
+                }
+                
+                // Floating pencil icon at bottom right
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            showingMealEditPopup = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 56, height: 56)
+                                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                                
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
                     }
                 }
             }
@@ -241,8 +283,24 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingShoppingList) {
             if let mealPlanId = currentMealPlanId {
-                ShoppingListView(mealPlanId: mealPlanId)
+                ShoppingListView(mealPlanId: mealPlanId, weekIdentifier: getWeekIdentifier(for: selectedDate))
             }
+        }
+        .sheet(isPresented: $showingMealEditPopup) {
+            MealEditPopupView(
+                onEditBreakfast: {
+                    showingMealEditPopup = false
+                    checkAndCreateBreakfastMealPlan()
+                },
+                onEditLunch: {
+                    showingMealEditPopup = false
+                    checkAndCreateLunchMealPlan()
+                },
+                onEditDinner: {
+                    showingMealEditPopup = false
+                    checkAndCreateDinnerMealPlan()
+                }
+            )
         }
     }
     
@@ -493,7 +551,7 @@ struct HomeView: View {
                             .background(
                         RoundedRectangle(cornerRadius: 12)
                                     .stroke(Color.green, lineWidth: 2)
-                            .background(Color(.systemBackground))
+                            .background(Color("AppBackground"))
                     )
                 }
             }
@@ -576,7 +634,7 @@ struct HomeView: View {
     
     // MARK: - Meal Card Views
     private func simplifiedMealCard(dayMeal: DayMeal, mealType: String) -> some View {
-        NavigationLink(destination: MealDetailView(dayMeal: dayMeal).environmentObject(appState)) {
+        NavigationLink(destination: MealDetailView(dayMeal: dayMeal, mealType: mealType).environmentObject(appState)) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(dayMeal.meal.name)
@@ -622,7 +680,7 @@ struct HomeView: View {
                         .buttonStyle(PlainButtonStyle())
                     }
     
-    private func selectedDayMealCard(dayMeal: DayMeal) -> some View {
+    private func selectedDayMealCard(dayMeal: DayMeal, mealType: String = "dinner") -> some View {
         VStack(spacing: 20) {
             // Meal Header
             VStack(spacing: 16) {
@@ -633,7 +691,7 @@ struct HomeView: View {
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
                         
-                        Text("Today's Dinner")
+                        Text("Today's \(mealType.capitalized)")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -865,6 +923,7 @@ struct HomeView: View {
                 if now.timeIntervalSince(lastMealPlansUpdate) < 30 && !cachedMealPlans.isEmpty {
                     // Use cached data (cache is valid for 30 seconds)
                     mealPlans = cachedMealPlans
+                    print("🔄 Using cached meal plans (\(mealPlans.count) plans)")
                 } else {
                     // Fetch fresh data and update cache
                     let freshMealPlans = try await databaseService.getUserMealPlans()
@@ -873,6 +932,13 @@ struct HomeView: View {
                         lastMealPlansUpdate = now
                     }
                     mealPlans = freshMealPlans
+                    print("🔄 Fetched fresh meal plans (\(mealPlans.count) plans)")
+                }
+                
+                // DEBUG: Print all meal plans with their types
+                print("📋 DEBUG: All meal plans loaded:")
+                for (index, plan) in mealPlans.enumerated() {
+                    print("  [\(index)] \(plan.name) - Type: '\(plan.mealPlanType)' - Week: \(plan.weekStartDate) - ID: \(plan.id?.uuidString ?? "nil")")
                 }
                 
                 // Find meal plan that was created during the week of the selected date
@@ -888,9 +954,17 @@ struct HomeView: View {
                 let expectedDayIndex = selectedWeekday - 1 // Sunday=1 becomes index 0, Monday=2 becomes index 1, etc.
                 
                 // Find meal plans for the same week
+                print("🔍 DEBUG: Looking for meal plans for selected date: \(selectedDate)")
+                print("🔍 DEBUG: Week interval: \(getWeekInterval(for: selectedDate))")
+                
                 let dinnerMealPlan = findDinnerMealPlanForWeek(mealPlans, weekOf: selectedDate)
                 let breakfastMealPlan = findBreakfastMealPlanForWeek(mealPlans, weekOf: selectedDate)
                 let lunchMealPlan = findLunchMealPlanForWeek(mealPlans, weekOf: selectedDate)
+                
+                print("🍽️ DEBUG: Found meal plans:")
+                print("  - Breakfast: \(breakfastMealPlan?.name ?? "nil") (ID: \(breakfastMealPlan?.id?.uuidString ?? "nil"))")
+                print("  - Lunch: \(lunchMealPlan?.name ?? "nil") (ID: \(lunchMealPlan?.id?.uuidString ?? "nil"))")
+                print("  - Dinner: \(dinnerMealPlan?.name ?? "nil") (ID: \(dinnerMealPlan?.id?.uuidString ?? "nil"))")
                 
                 // Performance optimization: Fetch meal plan details in parallel
                 async let dinnerDetails = dinnerMealPlan?.id != nil ? 
@@ -908,30 +982,39 @@ struct HomeView: View {
                 var dayMeal: DayMeal? = nil
                 var dinnerPlanId: UUID? = nil
                 if let dinnerPlan = fullDinnerMealPlan {
+                    print("🔍 DEBUG: Looking for dinner meal with expectedDayIndex: \(expectedDayIndex)")
+                    for (index, dayMealItem) in dinnerPlan.dayMeals.enumerated() {
+                        print("  📋 Meal \(index): day='\(dayMealItem.day)', dayIndex=\(dayMealItem.dayIndex), matches=\(dayMealItem.dayIndex == expectedDayIndex)")
+                    }
                     dayMeal = dinnerPlan.dayMeals.first { dayMealItem in
                         dayMealItem.dayIndex == expectedDayIndex
                     }
                     dinnerPlanId = dinnerMealPlan?.id
+                    print("🔍 DEBUG: Found dinner meal: \(dayMeal?.meal.name ?? "nil")")
                 }
                 
                 // Process breakfast meal
                 var breakfastMeal: DayMeal? = nil
                 var breakfastPlanId: UUID? = nil
                 if let breakfastPlan = fullBreakfastMealPlan {
+                    print("🔍 DEBUG: Looking for breakfast meal with expectedDayIndex: \(expectedDayIndex)")
                     breakfastMeal = breakfastPlan.dayMeals.first { dayMeal in
                         dayMeal.dayIndex == expectedDayIndex
                     }
                     breakfastPlanId = breakfastMealPlan?.id
+                    print("🔍 DEBUG: Found breakfast meal: \(breakfastMeal?.meal.name ?? "nil")")
                 }
                 
                 // Process lunch meal
                 var lunchMeal: DayMeal? = nil
                 var lunchPlanId: UUID? = nil
                 if let lunchPlan = fullLunchMealPlan {
+                    print("🔍 DEBUG: Looking for lunch meal with expectedDayIndex: \(expectedDayIndex)")
                     lunchMeal = lunchPlan.dayMeals.first { dayMeal in
                         dayMeal.dayIndex == expectedDayIndex
                     }
                     lunchPlanId = lunchMealPlan?.id
+                    print("🔍 DEBUG: Found lunch meal: \(lunchMeal?.meal.name ?? "nil")")
                 }
                 
                 await MainActor.run {
@@ -1141,15 +1224,27 @@ struct HomeView: View {
     
     /// Finds a breakfast meal plan for a specific week
     private func findBreakfastMealPlanForWeek(_ mealPlans: [DatabaseMealPlan], weekOf date: Date) -> DatabaseMealPlan? {
-        return mealPlans.first { plan in
+        print("🔍 DEBUG findBreakfastMealPlanForWeek: Looking for breakfast meal plan for week of \(date)")
+        print("🔍 DEBUG: Today's date: \(date)")
+        print("🔍 DEBUG: Today's week interval: \(getWeekInterval(for: date))")
+        
+        let result = mealPlans.first { plan in
             // Check if this meal plan was created during the specified week AND is a breakfast meal plan
-            guard mealPlanCreatedDuringWeek(plan, weekOf: date) else {
-                return false
-            }
+            let createdDuringWeek = mealPlanCreatedDuringWeek(plan, weekOf: date)
+            let isBreakfast = plan.mealPlanType == "breakfast"
             
-            // Check if this meal plan is specifically for breakfast using the identifier
-            return plan.mealPlanType == "breakfast"
+            print("  📋 Checking plan: \(plan.name) (ID: \(plan.id?.uuidString ?? "nil"))")
+            print("    - Type: '\(plan.mealPlanType)' (isBreakfast: \(isBreakfast))")
+            print("    - Week: \(plan.weekStartDate)")
+            print("    - IsActive: \(plan.isActive)")
+            print("    - CreatedDuringWeek: \(createdDuringWeek)")
+            print("    - Match: \(createdDuringWeek && isBreakfast)")
+            
+            return createdDuringWeek && isBreakfast
         }
+        
+        print("🔍 DEBUG: findBreakfastMealPlanForWeek result: \(result?.name ?? "nil")")
+        return result
     }
     
     /// Finds a lunch meal plan for a specific week
@@ -1182,6 +1277,7 @@ struct HomeView: View {
     private func getWeekInterval(for date: Date) -> (start: Date, end: Date) {
         var calendar = Calendar.current
         calendar.firstWeekday = 1 // Ensure Sunday is the first day
+        calendar.timeZone = TimeZone.current // Use local timezone for consistent week calculations
         let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
         let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? date
         return (start: weekStart, end: weekEnd)
@@ -1189,6 +1285,82 @@ struct HomeView: View {
     
     /// Checks if a meal plan was created during a specific week
     private func mealPlanCreatedDuringWeek(_ mealPlan: DatabaseMealPlan, weekOf date: Date) -> Bool {
+        print("🔍 DEBUG mealPlanCreatedDuringWeek: Checking meal plan \(mealPlan.name)")
+        print("  - Target date: \(date)")
+        print("  - Target week interval: \(getWeekInterval(for: date))")
+        print("  - Meal plan week_start_date: '\(mealPlan.weekStartDate)'")
+        print("  - Meal plan created_at: \(mealPlan.createdAt ?? "nil")")
+        print("  - Meal plan is_active: \(mealPlan.isActive)")
+        
+        // IMPORTANT: We should match by week_start_date, not creation timestamp!
+        // Let's check both methods and see which one works
+        
+        // Method 1: Check by week_start_date (recommended)
+        let weekStartResult = checkByWeekStartDate(mealPlan, weekOf: date)
+        print("  - Week start method result: \(weekStartResult)")
+        
+        // Method 2: Check by creation timestamp (current logic)
+        let creationTimestampResult = checkByCreationTimestamp(mealPlan, weekOf: date)
+        print("  - Creation timestamp method result: \(creationTimestampResult)")
+        
+        // For now, let's use the week_start_date method as it's more logical
+        return weekStartResult
+    }
+    
+    private func checkByWeekStartDate(_ mealPlan: DatabaseMealPlan, weekOf date: Date) -> Bool {
+        // Parse the week_start_date string - it might be date-only format
+        var mealPlanWeekStart: Date?
+        
+        // Try date-only format first (what we're seeing: "2025-08-18")
+        let dateOnlyFormatter = DateFormatter()
+        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+        dateOnlyFormatter.timeZone = TimeZone.current // Use local timezone for consistency
+        mealPlanWeekStart = dateOnlyFormatter.date(from: mealPlan.weekStartDate)
+        
+        // If that fails, try ISO8601 format
+        if mealPlanWeekStart == nil {
+            let iso8601Formatter = ISO8601DateFormatter()
+            iso8601Formatter.formatOptions = [.withInternetDateTime]
+            mealPlanWeekStart = iso8601Formatter.date(from: mealPlan.weekStartDate)
+        }
+        
+        guard let validMealPlanWeekStart = mealPlanWeekStart else {
+            print("  ❌ Failed to parse week_start_date: \(mealPlan.weekStartDate)")
+            return false
+        }
+        
+        print("  ✅ Parsed meal plan week start: \(validMealPlanWeekStart)")
+        
+        // Get the week interval for the target date
+        let targetWeekInterval = getWeekInterval(for: date)
+        let mealPlanWeekInterval = getWeekInterval(for: validMealPlanWeekStart)
+        
+        // Check if they're the same week (exact match)
+        let exactMatch = targetWeekInterval.start == mealPlanWeekInterval.start
+        
+        // Also check if the meal plan week start falls within the target week
+        // This handles boundary cases where week calculations might differ
+        let mealPlanDateInTargetWeek = validMealPlanWeekStart >= targetWeekInterval.start && 
+                                      validMealPlanWeekStart <= targetWeekInterval.end
+        
+        // Also check if target date falls within meal plan week
+        let targetDateInMealPlanWeek = date >= mealPlanWeekInterval.start && 
+                                      date <= mealPlanWeekInterval.end
+        
+        let isSameWeek = exactMatch || mealPlanDateInTargetWeek || targetDateInMealPlanWeek
+        
+        print("  📅 Week comparison:")
+        print("    - Target week: \(targetWeekInterval.start) to \(targetWeekInterval.end)")
+        print("    - Meal plan week: \(mealPlanWeekInterval.start) to \(mealPlanWeekInterval.end)")
+        print("    - Exact match: \(exactMatch)")
+        print("    - Meal plan date in target week: \(mealPlanDateInTargetWeek)")
+        print("    - Target date in meal plan week: \(targetDateInMealPlanWeek)")
+        print("    - Final result: \(isSameWeek)")
+        
+        return isSameWeek
+    }
+    
+    private func checkByCreationTimestamp(_ mealPlan: DatabaseMealPlan, weekOf date: Date) -> Bool {
         guard let createdAtString = mealPlan.createdAt else {
             print("🔍 No createdAt found for meal plan \(mealPlan.id?.uuidString ?? "nil")")
             return false
@@ -1245,6 +1417,7 @@ struct HomeView: View {
 // MARK: - Meal Detail View
 struct MealDetailView: View {
     @State private var currentDayMeal: DayMeal
+    private let mealType: String
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
     
@@ -1255,8 +1428,9 @@ struct MealDetailView: View {
     @State private var generatingImageForMealId: UUID? = nil
     @StateObject private var openAIService = OpenAIService.shared
     
-    init(dayMeal: DayMeal) {
+    init(dayMeal: DayMeal, mealType: String = "dinner") {
         self._currentDayMeal = State(initialValue: dayMeal)
+        self.mealType = mealType
     }
     
     var body: some View {
@@ -1303,7 +1477,7 @@ struct MealDetailView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                     
-                    Text("Today's Dinner")
+                    Text("Today's \(mealType.capitalized)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -1782,10 +1956,10 @@ struct FounderUpdatesView: View {
                     )
                     
                     UpdateMessageCard(
-                        icon: "sunrise.fill",
-                        title: "Breakfast and Lunch",
-                        message: "Breakfast and lunch options are coming soon.",
-                        iconColor: .blue
+                        icon: "slider.horizontal.3",
+                        title: "Daily Meal Customization",
+                        message: "Daily meal customization coming soon, stay tuned!",
+                        iconColor: .purple
                     )
                     
                     UpdateMessageCard(
@@ -2003,6 +2177,160 @@ struct MacroCard: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         )
+    }
+}
+
+// MARK: - Meal Edit Popup View
+struct MealEditPopupView: View {
+    let onEditBreakfast: () -> Void
+    let onEditLunch: () -> Void
+    let onEditDinner: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 12) {
+                    Text("Edit Meals")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                    
+                    Text("Choose which meal you'd like to edit")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 24)
+                .padding(.horizontal, 20)
+                
+                // Meal editing buttons
+                VStack(spacing: 16) {
+                    // Edit Breakfast
+                    Button(action: onEditBreakfast) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "sunrise.fill")
+                                .font(.title2)
+                                .foregroundColor(.orange)
+                                .frame(width: 32)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Edit Breakfast")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                
+                                Text("Update your morning meal plan")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Edit Lunch
+                    Button(action: onEditLunch) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "sun.max.fill")
+                                .font(.title2)
+                                .foregroundColor(.yellow)
+                                .frame(width: 32)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Edit Lunch")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                
+                                Text("Update your midday meal plan")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Edit Dinner
+                    Button(action: onEditDinner) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "moon.fill")
+                                .font(.title2)
+                                .foregroundColor(.purple)
+                                .frame(width: 32)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Edit Dinner")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                
+                                Text("Update your evening meal plan")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 32)
+                
+                Spacer()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .fontWeight(.medium)
+                    .foregroundColor(.green)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 

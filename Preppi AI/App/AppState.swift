@@ -17,6 +17,9 @@ final class AppState: ObservableObject {
     @Published var isCheckingEntitlements: Bool = false
     @Published var shouldDismissMealPlanFlow: Bool = false
     @Published var showSplashScreen: Bool = true
+    @Published var showGetStarted: Bool = false
+    @Published var selectedMealTypes: [String] = ["dinner"]
+    @Published var currentMealTypeBeingCreated: String = "dinner" // Track which meal type is being created
     
     // MARK: - Services
     private let databaseService = LocalUserDataService.shared
@@ -129,6 +132,10 @@ final class AppState: ObservableObject {
         errorMessage = nil
         hasProAccess = false
         showPostOnboardingPaywall = false
+        showGetStarted = false
+        
+        // Reset Get Started status so user sees it again for new account
+        UserDefaults.standard.removeObject(forKey: "hasSeenGetStarted")
         
         // CRITICAL: Clear local storage data to prevent old data from persisting
         LocalUserDataService.shared.clearAllData()
@@ -287,12 +294,26 @@ final class AppState: ObservableObject {
         isAuthenticated && isOnboardingComplete && !hasProAccess && !isCheckingEntitlements
     }
     
+    var shouldShowGetStarted: Bool {
+        !isAuthenticated && !hasSeenGetStarted && !showGetStarted
+    }
+    
     var shouldShowAuth: Bool {
-        !isAuthenticated
+        !isAuthenticated && (hasSeenGetStarted || showGetStarted)
     }
     
     var shouldShowLoading: Bool {
         isLoading || (isAuthenticated && isCheckingEntitlements)
+    }
+    
+    // MARK: - Get Started Management
+    private var hasSeenGetStarted: Bool {
+        UserDefaults.standard.bool(forKey: "hasSeenGetStarted")
+    }
+    
+    func markGetStartedAsSeen() {
+        UserDefaults.standard.set(true, forKey: "hasSeenGetStarted")
+        showGetStarted = true
     }
     
     // MARK: - Debug Methods
@@ -302,6 +323,8 @@ final class AppState: ObservableObject {
         print("Onboarding Complete: \(isOnboardingComplete)")
         print("Pro Access: \(hasProAccess)")
         print("Checking Entitlements: \(isCheckingEntitlements)")
+        print("Has Seen Get Started: \(hasSeenGetStarted)")
+        print("Show Get Started: \(shouldShowGetStarted)")
         print("Show Auth: \(shouldShowAuth)")
         print("Show Loading: \(shouldShowLoading)")
         print("Show Onboarding: \(shouldShowOnboarding)")

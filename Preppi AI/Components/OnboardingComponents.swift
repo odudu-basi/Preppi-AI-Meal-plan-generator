@@ -120,18 +120,20 @@ struct OnboardingProgressView: View {
 // MARK: - Onboarding Step Enum
 enum OnboardingStep: Int, CaseIterable {
     case name = 0
-    case cookingPreference = 1
-    case marketing = 2
-    case motivation = 3
-    case challenge = 4
-    case healthGoals = 5
-    case physicalStats = 6
-    case dietaryRestrictions = 7
-    case budget = 8
+    case sex = 1
+    case cookingPreference = 2
+    case marketing = 3
+    case motivation = 4
+    case challenge = 5
+    case healthGoals = 6
+    case physicalStats = 7
+    case dietaryRestrictions = 8
+    case budget = 9
     
     var title: String {
         switch self {
         case .name: return "What's your name?"
+        case .sex: return "What's your sex?"
         case .cookingPreference: return "Do you like to cook?"
         case .marketing: return "How did you hear about us?"
         case .motivation: return "What's your main reason for trying PREPPI AI?"

@@ -12,7 +12,36 @@ class OpenAIService: ObservableObject {
     
     private init() {}
     
-    func generateMealPlan(for userData: UserOnboardingData, cuisines: [String] = [], preparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3) async throws -> [DayMeal] {
+    // MARK: - Week Identifier Helper
+    
+    /// Generate a week identifier from a given date (format: yyyy-MM-dd for week start)
+    private func getWeekIdentifier(for date: Date) -> String {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday is first day
+        
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: weekStart)
+    }
+    
+    /// Get the current week identifier
+    private func getCurrentWeekIdentifier() -> String {
+        return getWeekIdentifier(for: Date())
+    }
+    
+    /// Get the current authenticated user's ID
+    private func getCurrentUserId() async throws -> UUID? {
+        do {
+            let session = try await SupabaseService.shared.auth.session
+            return UUID(uuidString: session.user.id.uuidString)
+        } catch {
+            print("❌ Error getting current user: \(error)")
+            return nil
+        }
+    }
+    
+    func generateMealPlan(for userData: UserOnboardingData, cuisines: [String] = [], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3, weekIdentifier: String? = nil) async throws -> [DayMeal] {
         await MainActor.run {
             isGenerating = true
             errorMessage = nil
@@ -24,7 +53,7 @@ class OpenAIService: ObservableObject {
             }
         }
         
-        let prompt = createMealPlanPrompt(from: userData, cuisines: cuisines, preparationStyle: preparationStyle, mealCount: mealCount)
+        let prompt = createMealPlanPrompt(from: userData, cuisines: cuisines, mealType: mealType, preparationStyle: preparationStyle, mealCount: mealCount)
         
         let requestBody: [String: Any] = [
             "model": "gpt-4o",
@@ -100,7 +129,7 @@ class OpenAIService: ObservableObject {
             }
             
             var dayMeals: [DayMeal] = []
-            let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
             
             for (index, mealData) in mealsArray.enumerated() {
                 guard index < weekdays.count,
@@ -133,8 +162,16 @@ class OpenAIService: ObservableObject {
                     )
                 }
                 
-                // Calculate recommended calories before dinner based on user goals
-                let recommendedCalories = CalorieCalculationService.shared.calculateRecommendedCaloriesBeforeDinner(for: userData)
+                // Calculate recommended calories based on meal type and user goals
+                let recommendedCalories: Int
+                if mealType == "breakfast" {
+                    // For breakfast, use a portion of daily calories (typically 20-25%)
+                    let totalDailyCalories = CalorieCalculationService.shared.calculateDailyCalorieGoal(for: userData)
+                    recommendedCalories = Int(Double(totalDailyCalories) * 0.8) // 80% remaining after breakfast
+                } else {
+                    // For dinner, use existing logic
+                    recommendedCalories = CalorieCalculationService.shared.calculateRecommendedCaloriesBeforeDinner(for: userData)
+                }
                 
                 let meal = Meal(
                     id: UUID(),
@@ -163,9 +200,19 @@ class OpenAIService: ObservableObject {
             }
             
             // Store shopping list in UserDefaults for access across the app
+            // Use user-specific, meal type and week specific key to prevent data mixing between users
             if let shoppingListData = try? JSONSerialization.data(withJSONObject: shoppingList),
                let shoppingListString = String(data: shoppingListData, encoding: .utf8) {
-                UserDefaults.standard.set(shoppingListString, forKey: "weeklyShoppingList")
+                let weekKey = weekIdentifier ?? getCurrentWeekIdentifier()
+                
+                // Get current user ID for user-specific storage
+                let userId = try? await getCurrentUserId()
+                let userKey = userId?.uuidString ?? "unknown"
+                
+                let storageKey = "user_\(userKey)_weeklyShoppingList_\(mealType)_\(weekKey)"
+                UserDefaults.standard.set(shoppingListString, forKey: storageKey)
+                
+                print("🛒 Stored shopping list with user-specific key: \(storageKey)")
             }
             
             // Track meal plan generation success
@@ -187,11 +234,13 @@ class OpenAIService: ObservableObject {
         }
     }
     
-    private func createMealPlanPrompt(from userData: UserOnboardingData, cuisines: [String], preparationStyle: MealPlanInfoView.MealPreparationStyle, mealCount: Int = 3) -> String {
+    private func createMealPlanPrompt(from userData: UserOnboardingData, cuisines: [String], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle, mealCount: Int = 3) -> String {
+        let mealTypeCapitalized = mealType.capitalized
         var prompt = """
-        Create a 7-day dinner meal plan for a person with the following profile:
+        Create a 7-day \(mealType) meal plan for a person with the following profile:
         
         Name: \(userData.name)
+        Sex: \(userData.sex?.rawValue ?? "Not specified")
         Age: \(userData.age)
         Weight: \(userData.weight) lbs
         Height: \(userData.height) inches
@@ -248,14 +297,16 @@ class OpenAIService: ObservableObject {
             prompt += "\nDesign meals for BATCH COOKING with planned leftovers. Create exactly \(mealCount) unique meals that will be cooked in large portions and repeated throughout the week to fill all 7 days. For repeated meals, indicate which day the meal was originally prepared. Include make-ahead tips and storage suggestions."
         }
         
+        let calorieRange = CalorieCalculationService.shared.calculateMealCalorieRange(for: userData, mealType: mealType)
+        
         prompt += """
         
-        Please create exactly 7 dinner meals (one for each day of the week: Monday through Sunday) AND a comprehensive shopping list.
+        Please create exactly 7 \(mealType) meals (one for each day of the week: Sunday through Saturday) AND a comprehensive shopping list.
         
         For each meal, provide:
         1. A creative and appealing meal name
         2. A brief but appealing description (2-3 sentences) highlighting the main flavors and appeal
-        3. Calorie count (realistic for dinner)
+        3. Calorie count (realistic for \(mealType), typically \(calorieRange) calories)
         4. Cook time in minutes
         5. Main ingredients list (5-8 key ingredients)
         6. Original cooking day (if this is a repeated/leftover meal, specify which day it was originally prepared, e.g., "Monday". If it's a fresh meal, use the current day)
@@ -292,7 +343,7 @@ class OpenAIService: ObservableObject {
               "calories": 650,
               "cookTime": 35,
               "ingredients": ["chicken breasts", "quinoa", "olive oil", "lemon", "garlic", "oregano", "bell pepper", "zucchini"],
-              "originalCookingDay": "Monday",
+              "originalCookingDay": "Sunday",
               "macros": {
                 "protein": 45.5,
                 "carbohydrates": 55.2,

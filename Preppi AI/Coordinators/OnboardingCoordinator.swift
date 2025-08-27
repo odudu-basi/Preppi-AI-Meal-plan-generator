@@ -37,6 +37,8 @@ class OnboardingCoordinator: ObservableObject {
         
         switch currentStep {
         case .name:
+            currentStep = .sex
+        case .sex:
             currentStep = .cookingPreference
         case .cookingPreference:
             currentStep = .marketing
@@ -73,8 +75,10 @@ class OnboardingCoordinator: ObservableObject {
         switch currentStep {
         case .name:
             break
-        case .cookingPreference:
+        case .sex:
             currentStep = .name
+        case .cookingPreference:
+            currentStep = .sex
         case .marketing:
             currentStep = .cookingPreference
         case .motivation:
@@ -174,14 +178,15 @@ class OnboardingCoordinator: ObservableObject {
     
     var progressValue: Double {
         switch currentStep {
-        case .name: return 1.0/9.0
-        case .cookingPreference: return 2.0/9.0
-        case .marketing: return 3.0/9.0
-        case .motivation: return 4.0/9.0
-        case .challenge: return 5.0/9.0
-        case .healthGoals: return 6.0/9.0
-        case .physicalStats: return 7.0/9.0
-        case .dietaryRestrictions: return 8.0/9.0
+        case .name: return 1.0/10.0
+        case .sex: return 2.0/10.0
+        case .cookingPreference: return 3.0/10.0
+        case .marketing: return 4.0/10.0
+        case .motivation: return 5.0/10.0
+        case .challenge: return 6.0/10.0
+        case .healthGoals: return 7.0/10.0
+        case .physicalStats: return 8.0/10.0
+        case .dietaryRestrictions: return 9.0/10.0
         case .budget: return 1.0
         }
     }
@@ -189,6 +194,7 @@ class OnboardingCoordinator: ObservableObject {
     var stepTitle: String {
         switch currentStep {
         case .name: return "What's your name?"
+        case .sex: return "What's your sex?"
         case .cookingPreference: return "Do you like to cook?"
         case .marketing: return "How did you hear about us?"
         case .motivation: return "What's your main reason for trying PREPPI AI?"

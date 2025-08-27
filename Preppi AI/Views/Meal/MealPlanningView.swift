@@ -18,23 +18,43 @@ struct MealPlanningView: View {
     @State private var saveError: String?
     @State private var generatingImageForMealId: UUID? = nil
     
+    // Week context for shopping list generation
+    let selectedDate: Date?
+    
     // Default initializer for existing navigation
-    init(selectedCuisines: [String] = [], mealPreparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3) {
+    init(selectedCuisines: [String] = [], mealPreparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3, selectedDate: Date? = nil) {
         self.selectedCuisines = selectedCuisines
         self.mealPreparationStyle = mealPreparationStyle
         self.mealCount = mealCount
+        self.selectedDate = selectedDate
+    }
+    
+    /// Generate a week identifier from a given date (format: yyyy-MM-dd for week start)
+    private func getWeekIdentifier(for date: Date) -> String {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday is first day
+        calendar.timeZone = TimeZone.current // Use local timezone for consistency
+        
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone.current // Use local timezone for formatting
+        
+        print("🌍 DEBUG MealPlanningView: Week identifier for \(date) is \(formatter.string(from: weekStart))")
+        
+        return formatter.string(from: weekStart)
     }
 
     
-    private let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    private let weekdayIcons = ["🌟", "⚡", "🔥", "💪", "🎯", "🌈", "✨"]
+    private let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    private let weekdayIcons = ["✨", "🌟", "⚡", "🔥", "💪", "🎯", "🌈"]
     
     var body: some View {
         ZStack {
             // Background gradient
             LinearGradient(
                 colors: [
-                    Color(.systemBackground),
+                    Color("AppBackground"),
                     Color(.systemGray6).opacity(0.5)
                 ],
                 startPoint: .top,
@@ -215,7 +235,7 @@ struct MealPlanningView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
             
-            Text("Personalized dinners crafted just for you")
+            Text("Personalized meals crafted just for you")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -299,7 +319,7 @@ struct MealPlanningView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(.green)
                         
-                        Text("Dinner Plan")
+                        Text("Meal Plan")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -407,59 +427,8 @@ struct MealPlanningView: View {
                 }
             }
             
-            // Recommended Calories Section
+            // Daily Nutritional Breakdown Section
             VStack(spacing: 16) {
-                HStack {
-                    Image(systemName: "target")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                    
-                    Text("Daily Nutrition Goal")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                }
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Recommended calories before dinner")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        HStack(spacing: 4) {
-                            Text("\(dayMeal.meal.recommendedCaloriesBeforeDinner)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.blue)
-                            
-                            Text("calories")
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Dinner calories")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        HStack(spacing: 4) {
-                            Text("\(dayMeal.meal.calories)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.orange)
-                            
-                            Text("calories")
-                                .font(.subheadline)
-                                .foregroundColor(.orange)
-                        }
-                    }
-                }
-                
                 // Daily Nutritional Breakdown
                 if let macros = dayMeal.meal.macros {
                     VStack(spacing: 12) {
@@ -656,6 +625,7 @@ struct MealPlanningView: View {
                 let mealPlanId = try await databaseService.saveMealPlan(
                     dayMeals: mealPlan,
                     selectedCuisines: selectedCuisines,
+                    mealType: appState.currentMealTypeBeingCreated,
                     mealPreparationStyle: mealPreparationStyle,
                     mealCount: mealCount
                 )
@@ -691,11 +661,14 @@ struct MealPlanningView: View {
     private func generateMealPlan() {
         Task {
             do {
+                let weekIdentifier = selectedDate.map { getWeekIdentifier(for: $0) }
                 let generatedMeals = try await openAIService.generateMealPlan(
                     for: appState.userData,
                     cuisines: selectedCuisines,
+                    mealType: appState.currentMealTypeBeingCreated,
                     preparationStyle: mealPreparationStyle,
-                    mealCount: mealCount
+                    mealCount: mealCount,
+                    weekIdentifier: weekIdentifier
                 )
                 await MainActor.run {
                     mealPlan = generatedMeals

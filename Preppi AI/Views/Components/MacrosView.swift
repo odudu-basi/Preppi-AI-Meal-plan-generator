@@ -246,7 +246,7 @@ struct CompactMacrosView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(.systemBackground),
+                            Color("AppBackground"),
                             Color(.systemGray6).opacity(0.3)
                         ],
                         startPoint: .topLeading,

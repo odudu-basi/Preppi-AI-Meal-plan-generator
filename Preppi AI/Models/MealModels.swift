@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Macros Data Model
-struct Macros: Codable {
+struct Macros: Codable, Hashable {
     let protein: Double      // grams
     let carbohydrates: Double // grams  
     let fat: Double          // grams
@@ -16,7 +16,7 @@ struct Macros: Codable {
 }
 
 // MARK: - Meal Data Models
-struct Meal: Identifiable, Codable {
+struct Meal: Identifiable, Codable, Hashable {
     let id: UUID
     let name: String
     let description: String
@@ -36,7 +36,7 @@ struct Meal: Identifiable, Codable {
     let servingInfo: String? // Serving information and presentation
 }
 
-struct DayMeal: Identifiable, Codable {
+struct DayMeal: Identifiable, Codable, Hashable {
     let id: UUID
     let day: String
     let meal: Meal
@@ -62,7 +62,7 @@ struct MealPlan: Identifiable, Codable {
 
 // MARK: - Extensions
 extension DayMeal {
-    static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    static let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     
     var dayIndex: Int {
         Self.weekdays.firstIndex(of: day) ?? 0

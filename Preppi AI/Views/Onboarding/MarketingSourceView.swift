@@ -70,10 +70,11 @@ struct MarketingSourceView: View {
                             .opacity(animateHeader ? 1.0 : 0.0)
                             .offset(y: animateHeader ? 0 : 20)
                         
-                        Text("Help us understand where our users discover Preppi AI and improve our outreach")
+                        Text("Help us understand how you found us")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.8)
                             .padding(.horizontal, 20)
                             .opacity(animateHeader ? 1.0 : 0.0)
                             .offset(y: animateHeader ? 0 : 20)

@@ -169,7 +169,7 @@ struct RecipePage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground).ignoresSafeArea())
+        .background(Color("AppBackground").ignoresSafeArea())
     }
     
     // MARK: - Error View
@@ -211,7 +211,7 @@ struct RecipePage: View {
             .shadow(color: .green.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground).ignoresSafeArea())
+        .background(Color("AppBackground").ignoresSafeArea())
     }
     
     // MARK: - Header Section

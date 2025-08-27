@@ -5,6 +5,7 @@ struct ShoppingListView: View {
     @StateObject private var databaseService = ShoppingListDatabaseService()
     
     let mealPlanId: UUID
+    let weekIdentifier: String? // Week identifier for this shopping list
     
     @State private var shoppingList: [String: [String]] = [:]
     @State private var checkedItems: Set<String> = []
@@ -108,7 +109,7 @@ struct ShoppingListView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground).ignoresSafeArea())
+                    .background(Color("AppBackground").ignoresSafeArea())
     }
     
     // MARK: - Empty State View
@@ -150,7 +151,7 @@ struct ShoppingListView: View {
             .shadow(color: .green.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground).ignoresSafeArea())
+                    .background(Color("AppBackground").ignoresSafeArea())
     }
     
     // MARK: - Header Section
@@ -185,10 +186,23 @@ struct ShoppingListView: View {
                 )
             }
             
-            Text("Everything you need for your weekly meal plan")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                Text("Everything you need for your weekly meal plan")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Text("Week of \(formatWeekIdentifier(getCurrentWeekIdentifier()))")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.green.opacity(0.1))
+                    )
+            }
         }
         .padding(24)
         .background(
@@ -267,6 +281,36 @@ struct ShoppingListView: View {
     
     // MARK: - Helper Functions
     
+    /// Generate a week identifier from a given date (format: yyyy-MM-dd for week start)
+    private func getWeekIdentifier(for date: Date) -> String {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Sunday is first day
+        
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: weekStart)
+    }
+    
+    /// Get the current week identifier or use the provided one
+    private func getCurrentWeekIdentifier() -> String {
+        return weekIdentifier ?? getWeekIdentifier(for: Date())
+    }
+    
+    /// Format week identifier for display (convert yyyy-MM-dd to readable format)
+    private func formatWeekIdentifier(_ weekId: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        
+        if let date = formatter.date(from: weekId) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "MMM d, yyyy"
+            return displayFormatter.string(from: date)
+        }
+        
+        return weekId // Fallback to original format
+    }
+    
     /// Load shopping list structure and checked states from database
     private func loadShoppingListAndCheckedStates() async {
         isLoading = true
@@ -297,19 +341,60 @@ struct ShoppingListView: View {
         isLoading = false
     }
     
-    /// Load shopping list structure from UserDefaults
+    /// Load shopping list structure from UserDefaults (aggregating all meal types)
     private func loadShoppingListStructure() async {
-        guard let shoppingListString = UserDefaults.standard.string(forKey: "weeklyShoppingList"),
-              let data = shoppingListString.data(using: .utf8),
-              let decodedList = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] else {
-            await MainActor.run {
-                shoppingList = [:]
+        var aggregatedShoppingList: [String: [String]] = [:]
+        
+        // Load shopping lists for all meal types for the specific week
+        let mealTypes = ["breakfast", "lunch", "dinner"]
+        let weekKey = getCurrentWeekIdentifier()
+        
+        // Get current user ID for user-specific shopping list loading
+        let userId = try? await getCurrentUserId()
+        let userKey = userId?.uuidString ?? "unknown"
+        
+        print("🛒 DEBUG: Loading shopping lists for user \(userKey) in week: \(weekKey)")
+        
+        for mealType in mealTypes {
+            // Load user-specific, week-specific shopping lists
+            let userSpecificKey = "user_\(userKey)_weeklyShoppingList_\(mealType)_\(weekKey)"
+            
+            if let shoppingListString = UserDefaults.standard.string(forKey: userSpecificKey),
+               let data = shoppingListString.data(using: .utf8),
+               let decodedList = try? JSONSerialization.jsonObject(with: data) as? [String: [String]] {
+                
+                print("🛒 DEBUG: Found shopping list for \(mealType) in week \(weekKey): \(decodedList.keys.count) categories")
+                
+                // Merge this meal type's shopping list into the aggregated list
+                for (category, items) in decodedList {
+                    if aggregatedShoppingList[category] != nil {
+                        // Category exists, merge items and remove duplicates
+                        let existingItems = Set(aggregatedShoppingList[category]!)
+                        let newItems = Set(items)
+                        let mergedItems = Array(existingItems.union(newItems)).sorted()
+                        aggregatedShoppingList[category] = mergedItems
+                        print("🛒 DEBUG: Merged \(items.count) items into existing category '\(category)'")
+                    } else {
+                        // New category, add all items
+                        aggregatedShoppingList[category] = items.sorted()
+                        print("🛒 DEBUG: Added new category '\(category)' with \(items.count) items")
+                    }
+                }
+            } else {
+                print("🛒 DEBUG: No shopping list found for \(mealType) in week \(weekKey)")
             }
-            return
         }
         
+        print("🛒 DEBUG: Final aggregated shopping list has \(aggregatedShoppingList.keys.count) categories")
+        
+        // Clean up old shopping lists from different weeks to prevent confusion
+        await cleanupOldShoppingLists(currentWeekKey: weekKey, userKey: userKey)
+        
+        // Also clean up any old-format shopping lists that might exist from previous users
+        await cleanupOldFormatShoppingLists()
+        
         await MainActor.run {
-            shoppingList = decodedList
+            shoppingList = aggregatedShoppingList
         }
     }
     
@@ -347,6 +432,67 @@ struct ShoppingListView: View {
             await MainActor.run {
                 errorMessage = "Failed to clear items: \(error.localizedDescription)"
             }
+        }
+    }
+    
+    /// Clean up old shopping lists from UserDefaults to prevent week confusion
+    private func cleanupOldShoppingLists(currentWeekKey: String, userKey: String) async {
+        let mealTypes = ["breakfast", "lunch", "dinner"]
+        
+        // Get all UserDefaults keys
+        let allKeys = UserDefaults.standard.dictionaryRepresentation().keys
+        
+        for key in allKeys {
+            // Check if this is a shopping list key for this specific user
+            if key.hasPrefix("user_\(userKey)_weeklyShoppingList_") {
+                // Check if it's an old format key (without week identifier)
+                let isOldFormat = mealTypes.contains { mealType in
+                    key == "user_\(userKey)_weeklyShoppingList_\(mealType)"
+                }
+                
+                // Check if it's for a different week
+                let isDifferentWeek = mealTypes.contains { mealType in
+                    key.hasPrefix("user_\(userKey)_weeklyShoppingList_\(mealType)_") && 
+                    key != "user_\(userKey)_weeklyShoppingList_\(mealType)_\(currentWeekKey)"
+                }
+                
+                if isOldFormat || isDifferentWeek {
+                    UserDefaults.standard.removeObject(forKey: key)
+                    print("🛒 DEBUG: Cleaned up old shopping list key for user \(userKey): \(key)")
+                }
+            }
+        }
+        
+        print("🛒 DEBUG: Shopping list cleanup completed for user \(userKey) in week \(currentWeekKey)")
+    }
+    
+    /// Get the current authenticated user's ID
+    private func getCurrentUserId() async throws -> UUID? {
+        do {
+            let session = try await SupabaseService.shared.auth.session
+            return UUID(uuidString: session.user.id.uuidString)
+        } catch {
+            print("❌ Error getting current user: \(error)")
+            return nil
+        }
+    }
+    
+    /// Clean up any old-format shopping lists that might exist from previous users
+    private func cleanupOldFormatShoppingLists() async {
+        let allKeys = UserDefaults.standard.dictionaryRepresentation().keys
+        
+        // Find and remove old-format shopping list keys (without user prefix)
+        let oldFormatKeys = allKeys.filter { key in
+            key.hasPrefix("weeklyShoppingList_") && !key.contains("user_")
+        }
+        
+        for key in oldFormatKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+            print("🗑️ Cleaned up old-format shopping list key: \(key)")
+        }
+        
+        if !oldFormatKeys.isEmpty {
+            print("🛒 DEBUG: Cleaned up \(oldFormatKeys.count) old-format shopping list keys")
         }
     }
 }
@@ -508,6 +654,7 @@ struct ShoppingItemRow: View {
 
 #Preview {
     NavigationView {
-        ShoppingListView(mealPlanId: UUID())
+        ShoppingListView(mealPlanId: UUID(), weekIdentifier: nil)
     }
 }
+

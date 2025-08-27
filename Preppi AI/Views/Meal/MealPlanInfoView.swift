@@ -56,7 +56,7 @@ struct MealPlanInfoView: View {
                 // Background gradient
                 LinearGradient(
                     colors: [
-                        Color(.systemBackground),
+                        Color("AppBackground"),
                         Color(.systemGray6).opacity(0.3)
                     ],
                     startPoint: .top,
