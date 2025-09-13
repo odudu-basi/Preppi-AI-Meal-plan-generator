@@ -17,74 +17,74 @@ struct MotivationView: View {
     
     var body: some View {
         OnboardingContainer {
-            VStack(spacing: 20) {
-                // Progress indicator
-                OnboardingNavigationBar(
-                    currentStep: 4,
-                    totalSteps: OnboardingStep.totalSteps,
-                    canGoBack: true,
-                    onBackTapped: {
-                        coordinator.previousStep()
-                    }
-                )
-                
-                // Header Section
-                VStack(spacing: 25) {
-                    // Animated icon with gradient background
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.green.opacity(0.1), .blue.opacity(0.05)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                            .scaleEffect(animateHeader ? 1.0 : 0.8)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                        
-                        Image(systemName: "heart.circle.fill")
-                            .font(.system(size: 45))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.green, .blue],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .scaleEffect(animateHeader ? 1.0 : 0.8)
-                    }
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    // Progress indicator
+                    OnboardingNavigationBar(
+                        currentStep: 4,
+                        totalSteps: OnboardingStep.totalSteps,
+                        canGoBack: true,
+                        onBackTapped: {
+                            coordinator.previousStep()
+                        }
+                    )
                     
-                    VStack(spacing: 15) {
-                        Text("What's your main reason for trying PREPPI AI?")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.primary, .green],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                    // Header Section
+                    VStack(spacing: 25) {
+                        // Animated icon with gradient background
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.green.opacity(0.1), .blue.opacity(0.05)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .padding(.horizontal, 20)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
+                                .frame(width: 100, height: 100)
+                                .scaleEffect(animateHeader ? 1.0 : 0.8)
+                                .opacity(animateHeader ? 1.0 : 0.0)
+                            
+                            Image(systemName: "heart.circle.fill")
+                                .font(.system(size: 45))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.green, .blue],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .scaleEffect(animateHeader ? 1.0 : 0.8)
+                        }
                         
-                        Text("Select all that apply to you")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
+                        VStack(spacing: 15) {
+                            Text("What's your main reason for trying PREPPI AI?")
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.primary, .green],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .multilineTextAlignment(.center)
+                                .lineLimit(3)
+                                .padding(.horizontal, 20)
+                                .opacity(animateHeader ? 1.0 : 0.0)
+                                .offset(y: animateHeader ? 0 : 20)
+                            
+                            Text("Select all that apply to you")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                                .opacity(animateHeader ? 1.0 : 0.0)
+                                .offset(y: animateHeader ? 0 : 20)
+                        }
                     }
-                }
-                .padding(.top, 10)
-                
-                // Motivation Options
-                ScrollView(showsIndicators: false) {
+                    .padding(.top, 10)
+                    
+                    // Motivation Options
                     VStack(spacing: 16) {
                         ForEach(Array(Motivation.allCases.enumerated()), id: \.element.id) { index, motivation in
                             MotivationOptionCard(
@@ -114,17 +114,18 @@ struct MotivationView: View {
                         }
                     }
                     .padding(.horizontal, 20)
+                    
+                    // Continue Button
+                    MotivationContinueButton(
+                        isEnabled: !coordinator.userData.motivations.isEmpty,
+                        animateContent: animateContent
+                    ) {
+                        coordinator.userData.motivationOther = otherText
+                        coordinator.nextStep()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40) // Add bottom padding for better spacing
                 }
-                
-                // Continue Button
-                MotivationContinueButton(
-                    isEnabled: !coordinator.userData.motivations.isEmpty,
-                    animateContent: animateContent
-                ) {
-                    coordinator.userData.motivationOther = otherText
-                    coordinator.nextStep()
-                }
-                .padding(.horizontal, 20)
             }
         }
         .onAppear {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F00DB3AB2E6257E3006BA116 /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = F00DB3AA2E6257E3006BA116 /* SuperwallKit */; };
 		F03CA1702E39A31B002E41C9 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA16F2E39A31B002E41C9 /* Auth */; };
 		F03CA1722E39A31B002E41C9 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1712E39A31B002E41C9 /* Functions */; };
 		F03CA1742E39A31B002E41C9 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1732E39A31B002E41C9 /* PostgREST */; };
@@ -15,6 +16,7 @@
 		F03CA17D2E39A48E002E41C9 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA17C2E39A48E002E41C9 /* GoogleSignIn */; };
 		F03CA17F2E39A48E002E41C9 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA17E2E39A48E002E41C9 /* GoogleSignInSwift */; };
 		F0618F5F2E3E536500FBEB00 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F0618F5E2E3E536500FBEB00 /* Supabase */; };
+		F0B7A2FF2E45D161008EFBEC /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = F0B7A2FE2E45D161008EFBEC /* Mixpanel */; };
 		F0F0E6C02E3710510035BB38 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F0F0E6BF2E3710510035BB38 /* RevenueCat */; };
 		F0F0E6C22E3710510035BB38 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = F0F0E6C12E3710510035BB38 /* RevenueCatUI */; };
 /* End PBXBuildFile section */
@@ -75,6 +77,8 @@
 				F03CA1762E39A31B002E41C9 /* Realtime in Frameworks */,
 				F03CA1702E39A31B002E41C9 /* Auth in Frameworks */,
 				F03CA1742E39A31B002E41C9 /* PostgREST in Frameworks */,
+				F0B7A2FF2E45D161008EFBEC /* Mixpanel in Frameworks */,
+				F00DB3AB2E6257E3006BA116 /* SuperwallKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +157,8 @@
 				F03CA17C2E39A48E002E41C9 /* GoogleSignIn */,
 				F03CA17E2E39A48E002E41C9 /* GoogleSignInSwift */,
 				F0618F5E2E3E536500FBEB00 /* Supabase */,
+				F0B7A2FE2E45D161008EFBEC /* Mixpanel */,
+				F00DB3AA2E6257E3006BA116 /* SuperwallKit */,
 			);
 			productName = "Preppi AI";
 			productReference = F06E8ED82E33520D004256EE /* Preppi AI.app */;
@@ -240,6 +246,8 @@
 				F0F0E6BE2E3710500035BB38 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				F03CA17B2E39A48E002E41C9 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				F0B7A2FD2E45D161008EFBEC /* XCRemoteSwiftPackageReference "mixpanel-swift" */,
+				F00DB3A92E6257E3006BA116 /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F06E8ED92E33520D004256EE /* Products */;
@@ -440,11 +448,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "\"Preppi AI/Preview Content\"";
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -454,7 +463,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -469,11 +478,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "\"Preppi AI/Preview Content\"";
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -483,7 +493,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -497,11 +507,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -516,11 +526,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -534,10 +544,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -551,10 +561,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -606,6 +616,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F00DB3A92E6257E3006BA116 /* XCRemoteSwiftPackageReference "Superwall-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/superwall/Superwall-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.7.0;
+			};
+		};
 		F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase-community/supabase-swift.git";
@@ -622,6 +640,14 @@
 				minimumVersion = 9.0.0;
 			};
 		};
+		F0B7A2FD2E45D161008EFBEC /* XCRemoteSwiftPackageReference "mixpanel-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mixpanel/mixpanel-swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 		F0F0E6BE2E3710500035BB38 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
@@ -633,6 +659,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F00DB3AA2E6257E3006BA116 /* SuperwallKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F00DB3A92E6257E3006BA116 /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
+			productName = SuperwallKit;
+		};
 		F03CA16F2E39A31B002E41C9 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
@@ -672,6 +703,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		F0B7A2FE2E45D161008EFBEC /* Mixpanel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F0B7A2FD2E45D161008EFBEC /* XCRemoteSwiftPackageReference "mixpanel-swift" */;
+			productName = Mixpanel;
 		};
 		F0F0E6BF2E3710510035BB38 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;

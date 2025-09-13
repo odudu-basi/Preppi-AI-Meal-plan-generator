@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Macros Data Model
 struct Macros: Codable, Hashable {
@@ -81,5 +82,86 @@ extension MealPlan {
     var averageCookTime: Int {
         let totalTime = dayMeals.reduce(0) { $0 + $1.meal.cookTime }
         return dayMeals.isEmpty ? 0 : totalTime / dayMeals.count
+    }
+}
+
+// MARK: - Streaks Configuration
+enum DayCompletionRule: String, CaseIterable {
+    case anyMeal = "anyMeal"
+    case allMeals = "allMeals"
+}
+
+// MARK: - Meal Completion Types
+enum MealCompletionType: String, Codable, CaseIterable {
+    case none = "none"
+    case ateExact = "ateExact"
+    case ateSimilar = "ateSimilar"
+    
+    var displayName: String {
+        switch self {
+        case .none: return "Not Completed"
+        case .ateExact: return "Ate Exact Meal"
+        case .ateSimilar: return "Ate Similar Meal"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .none: return "circle"
+        case .ateExact: return "checkmark.circle.fill"
+        case .ateSimilar: return "checkmark.circle"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .none: return .gray
+        case .ateExact: return .green
+        case .ateSimilar: return .blue
+        }
+    }
+}
+
+// MARK: - Meal Instance for Completions
+struct MealInstance: Identifiable, Codable {
+    let id: UUID
+    let date: Date
+    let mealType: String
+    var completion: MealCompletionType
+    var completedAt: Date?
+    
+    init(id: UUID, date: Date, mealType: String, completion: MealCompletionType = .none, completedAt: Date? = nil) {
+        self.id = id
+        self.date = date
+        self.mealType = mealType
+        self.completion = completion
+        self.completedAt = completedAt
+    }
+}
+
+// MARK: - Day Streak State
+struct DayStreakState: Codable, Identifiable {
+    let id = UUID()
+    let date: Date
+    let isComplete: Bool
+    
+    init(date: Date, isComplete: Bool) {
+        self.date = date
+        self.isComplete = isComplete
+    }
+}
+
+// MARK: - Streak Summary
+struct StreakSummary: Codable {
+    let currentStreak: Int
+    let longestStreak: Int
+    let totalCompletedDays: Int
+    let lastCompletedDate: Date?
+    
+    init(currentStreak: Int = 0, longestStreak: Int = 0, totalCompletedDays: Int = 0, lastCompletedDate: Date? = nil) {
+        self.currentStreak = currentStreak
+        self.longestStreak = longestStreak
+        self.totalCompletedDays = totalCompletedDays
+        self.lastCompletedDate = lastCompletedDate
     }
 }

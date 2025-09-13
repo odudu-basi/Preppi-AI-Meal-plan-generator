@@ -4,41 +4,81 @@ struct GetStartedView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingSignIn = false
     @State private var showingSignUp = false
+    @State private var animationTrigger = false
     
     var body: some View {
         NavigationView {
             ZStack {
-                // Background gradient matching app design
+                // Replace image with gradient background
                 LinearGradient(
-                    colors: [
-                        Color("AppBackground"),
-                        Color(.systemGray6).opacity(0.3)
-                    ],
+                    colors: [Color.green, Color.mint],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .ignoresSafeArea()
+                    .ignoresSafeArea()
                 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Top spacing
-                        Spacer()
-                            .frame(height: 60)
-                        
-                        // App logo and title section
-                        logoSection
-                        
-                        // Features list section
-                        featuresSection
-                        
-                        // Action buttons section
-                        actionButtonsSection
-                        
-                        // Bottom spacing
-                        Spacer()
-                            .frame(height: 60)
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                
+                // Main content centered
+                VStack(spacing: 40) {
+                    Spacer()
+                    
+                    // Add welcome message above logo
+                    Text("Welcome to")
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.8))
+                    
+                    // Add animation to logo text
+                    Text("PREPPI AI")
+                        .font(.system(size: 48, weight: .bold))
+                        .foregroundColor(.white)
+                        .tracking(4)
+                        .opacity(animationTrigger ? 1 : 0)
+                        .animation(.easeIn(duration: 1.0), value: animationTrigger)
+                    
+                    // Simplified logo section without image and animations
+                    VStack(spacing: 12) {
+                        Text("Your AI-Powered Meal Planning Companion")
+                            .font(.title3)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 24)
+                    
+                    Spacer()
+                    
+                    // Simplified action buttons
+                    VStack(spacing: 16) {
+                        Button {
+                            appState.markGetStartedAsSeen()
+                            showingSignUp = true
+                        } label: {
+                            Text("Start Your Journey")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .cornerRadius(12)
+                                .shadow(color: .black.opacity(0.2), radius: 5)
+                        }
+                        
+                        Button {
+                            appState.markGetStartedAsSeen()
+                            showingSignIn = true
+                        } label: {
+                            Text("Sign In")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding()
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 40)
+                    
+                    Spacer()
                 }
             }
         }
@@ -51,105 +91,123 @@ struct GetStartedView: View {
             SignInSignUpView(initialMode: .signIn)
                 .environmentObject(appState)
         }
+        .onAppear {
+            animationTrigger = true
+        }
     }
     
     // MARK: - Logo Section
     private var logoSection: some View {
         VStack(spacing: 24) {
-            // App icon with shadow
+            // Animated app icon
             ZStack {
-                // Shadow background
-                RoundedRectangle(cornerRadius: 28)
-                    .fill(Color.black.opacity(0.1))
-                    .frame(width: 144, height: 144)
-                    .offset(x: 3, y: 3)
+                // Glowing background
+                Circle()
+                    .fill(Color.white.opacity(0.3))
+                    .frame(width: 160, height: 160)
+                    .blur(radius: 10)
+                    .scaleEffect(1.1)
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animationTrigger)
                 
                 // App icon
                 Image("AppLogo")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 140, height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 26))
+                    .clipShape(Circle())
                     .overlay(
-                        RoundedRectangle(cornerRadius: 26)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        Circle()
+                            .stroke(Color.white, lineWidth: 2)
+                            .opacity(0.5)
                     )
-                    .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
+                    .shadow(color: .white.opacity(0.3), radius: 12, x: 0, y: 6)
             }
             
             VStack(spacing: 12) {
-                // App name
+                // App name with gradient
                 Text("PREPPI AI")
                     .font(.system(size: 42, weight: .heavy, design: .default))
-                    .foregroundColor(.green)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.green, .mint],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .tracking(3)
                 
-                // Tagline
-                Text("Your AI-Powered Meal Planning Assistant")
+                // Animated tagline
+                Text("Your AI-Powered Meal Planning Companion")
                     .font(.title3)
                     .fontWeight(.medium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 16)
+                    .opacity(0.9)
+                    .transition(.opacity)
+                    .animation(.easeIn(duration: 1.0), value: animationTrigger)
             }
         }
         .padding(.bottom, 50)
     }
     
-    // MARK: - Features Section
-    private var featuresSection: some View {
+    // MARK: - Features Carousel
+    private var featuresCarousel: some View {
         VStack(spacing: 24) {
             // Section header
             VStack(spacing: 8) {
-                Text("Everything You Need")
+                Text("Discover Preppi AI")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                 
-                Text("Plan, shop, and cook with confidence")
+                Text("Revolutionize your meal planning")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
             .padding(.bottom, 16)
             
-            // Features list
-            VStack(spacing: 20) {
-                FeatureRow(
+            // Carousel of features
+            TabView {
+                FeatureCard(
                     icon: "brain",
                     iconColor: .purple,
-                    title: "AI-Generated Meal Plans",
-                    description: "Personalized weekly meal plans tailored to your preferences, goals, and dietary needs"
+                    title: "Smart Meal Plans",
+                    description: "AI-generated weekly plans tailored to your goals and preferences"
                 )
                 
-                FeatureRow(
+                FeatureCard(
                     icon: "cart.fill",
                     iconColor: .blue,
-                    title: "Smart Shopping Lists",
-                    description: "Automatically generated shopping lists organized by category to streamline your grocery trips"
+                    title: "Intelligent Shopping",
+                    description: "Auto-generated lists with smart organization and reminders"
                 )
                 
-                FeatureRow(
+                FeatureCard(
                     icon: "book.closed.fill",
                     iconColor: .orange,
-                    title: "Detailed Recipes",
-                    description: "Step-by-step cooking instructions with ingredient lists and nutritional information"
+                    title: "Recipe Library",
+                    description: "Detailed recipes with step-by-step guidance and nutrition info"
                 )
                 
-                FeatureRow(
+                FeatureCard(
                     icon: "chart.bar.fill",
                     iconColor: .red,
-                    title: "Nutrition Tracking",
-                    description: "Track your daily macros and calories to stay aligned with your health goals"
+                    title: "Progress Tracking",
+                    description: "Track macros, calories, and health goals effortlessly"
                 )
                 
-                FeatureRow(
+                FeatureCard(
                     icon: "photo.fill",
                     iconColor: .green,
-                    title: "Meal Visualization",
-                    description: "AI-generated images of your meals to see exactly what you'll be cooking"
+                    title: "Visual Inspiration",
+                    description: "AI-generated meal images to motivate your cooking"
                 )
             }
+            .tabViewStyle(PageTabViewStyle())
+            .frame(height: 180)
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
         }
         .padding(.bottom, 60)
     }
@@ -162,35 +220,25 @@ struct GetStartedView: View {
                 appState.markGetStartedAsSeen()
                 showingSignUp = true
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    
-                    Text("Get Started")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(
-                    LinearGradient(
-                        colors: [.green, .mint],
-                        startPoint: .leading,
-                        endPoint: .trailing
+                Text("Start Your Journey")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(
+                        Color.white
                     )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .green.opacity(0.3), radius: 12, x: 0, y: 6)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .white.opacity(0.3), radius: 12, x: 0, y: 6)
             }
             .buttonStyle(PlainButtonStyle())
             
             // Sign In Link
             VStack(spacing: 12) {
-                Text("Already have an account?")
+                Text("Already a member?")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.8))
                 
                 Button {
                     appState.markGetStartedAsSeen()
@@ -199,13 +247,13 @@ struct GetStartedView: View {
                     Text("Sign In")
                         .font(.headline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.green)
+                        .foregroundColor(.white)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 32)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.green, lineWidth: 2)
-                                .background(Color(.systemBackground))
+                                .stroke(Color.white, lineWidth: 2)
+                                .background(Color.clear)
                         )
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -214,47 +262,42 @@ struct GetStartedView: View {
     }
 }
 
-// MARK: - Feature Row Component
-struct FeatureRow: View {
+// MARK: - Feature Card Component
+struct FeatureCard: View {
     let icon: String
     let iconColor: Color
     let title: String
     let description: String
     
     var body: some View {
-        HStack(spacing: 16) {
+        VStack(spacing: 12) {
             // Icon
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.1))
-                    .frame(width: 56, height: 56)
-                
-                Image(systemName: icon)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(iconColor)
-            }
+            Image(systemName: icon)
+                .font(.largeTitle)
+                .fontWeight(.semibold)
+                .foregroundColor(iconColor)
             
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // Title
+            Text(title)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
             
-            Spacer()
+            // Description
+            Text(description)
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
         }
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 }

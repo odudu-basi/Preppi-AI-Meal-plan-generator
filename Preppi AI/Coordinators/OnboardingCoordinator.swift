@@ -126,9 +126,9 @@ class OnboardingCoordinator: ObservableObject {
                             ]
                         )
                     } else {
-                        // Show paywall
-                        showPaywall = true
-                        print("💰 Showing paywall for Pro subscription")
+                        // User completed onboarding but doesn't have Pro access
+                        // AppState will handle showing the paywall via PaywallRequiredView
+                        print("💰 Onboarding completed - AppState will show RevenueCat paywall")
                         
                         // Track paywall shown
                         MixpanelService.shared.track(event: MixpanelService.Events.paywallViewed)
@@ -172,6 +172,9 @@ class OnboardingCoordinator: ObservableObject {
         Task { @MainActor in
             AuthService.shared.updatePremiumStatus(isPremium: true)
         }
+        
+        // Request App Store review after successful purchase (great moment!)
+        AppStoreReviewService.shared.requestReviewIfAppropriate()
     }
     
 

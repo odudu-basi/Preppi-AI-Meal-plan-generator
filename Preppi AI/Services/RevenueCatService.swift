@@ -11,6 +11,7 @@ class RevenueCatService: NSObject, ObservableObject {
     @Published var error: String?
     
     private let apiKey = "appl_mrfQufZNpGpdmPAJsnBZtNWGLKO"
+    private var hasRecentlyRetried = false
     
     override init() {
         super.init()
@@ -18,11 +19,21 @@ class RevenueCatService: NSObject, ObservableObject {
     }
     
     private func configureRevenueCat() {
-        // Enable debug logging for troubleshooting
+        // Only enable debug logging in debug builds
+        #if DEBUG
         Purchases.logLevel = .debug
+        #else
+        Purchases.logLevel = .warn  // Only show warnings and errors in production
+        #endif
         
-        Purchases.configure(withAPIKey: apiKey)
+        // Configure RevenueCat for full subscription and paywall management
+        Purchases.configure(with: .builder(withAPIKey: apiKey)
+            .with(storeKitVersion: .storeKit2)
+            .build()
+        )
         Purchases.shared.delegate = self
+        
+        print("✅ RevenueCat configured for full subscription management with StoreKit 2")
         
         // Check initial entitlement status
         checkProEntitlement()
@@ -66,13 +77,18 @@ class RevenueCatService: NSObject, ObservableObject {
                     print("❌ RevenueCat error code: \(rcError)")
                 }
                 
-                // Auto-retry for network/SSL errors after 3 seconds
-                if errorMessage.contains("network") || errorMessage.contains("SSL") || errorMessage.contains("secure connection") {
-                    print("🔄 Will retry in 3 seconds...")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                // Auto-retry for network/SSL errors after 5 seconds (limit to prevent spam)
+                if (errorMessage.contains("network") || errorMessage.contains("SSL") || errorMessage.contains("secure connection")) && !self.hasRecentlyRetried {
+                    print("🔄 Will retry in 5 seconds...")
+                    self.hasRecentlyRetried = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
                         Task {
                             print("🔄 Auto-retrying RevenueCat offerings...")
                             await self.fetchOfferings()
+                            // Reset retry flag after 30 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) {
+                                self.hasRecentlyRetried = false
+                            }
                         }
                     }
                 }
@@ -145,6 +161,11 @@ class RevenueCatService: NSObject, ObservableObject {
                         print("   - Period Type: \(proEntitlement.periodType)")
                         print("   - Expiration Date: \(proEntitlement.expirationDate?.description ?? "N/A")")
                     }
+                    
+                    // RevenueCat manages both subscriptions and paywall UI
+                    if isProActive {
+                        print("📢 Pro entitlement is active - user has premium access")
+                    }
                 } else {
                     self?.isProUser = false
                     print("❌ Could not check entitlements: \(error?.localizedDescription ?? "Unknown error")")
@@ -158,7 +179,10 @@ class RevenueCatService: NSObject, ObservableObject {
         print("🔄 Force refreshing customer info from RevenueCat servers...")
         
         do {
-            let customerInfo = try await Purchases.shared.customerInfo()
+            // Add timeout to prevent hanging
+            let customerInfo = try await withTimeout(seconds: 15) {
+                try await Purchases.shared.customerInfo()
+            }
             
             DispatchQueue.main.async {
                 let isProActive = customerInfo.entitlements["Pro"]?.isActive == true
@@ -179,10 +203,30 @@ class RevenueCatService: NSObject, ObservableObject {
         } catch {
             DispatchQueue.main.async {
                 self.error = "Failed to refresh customer info: \(error.localizedDescription)"
-                self.isProUser = false
+                // Don't set isProUser = false immediately - let app show with limited access
+                print("⚠️ RevenueCat check failed, allowing limited access")
             }
             print("❌ Force refresh failed: \(error)")
+            
+            // Return false but don't prevent app from showing
             return false
+        }
+    }
+    
+    private func withTimeout<T>(seconds: Double, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw RevenueCatTimeoutError()
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
     
@@ -205,6 +249,49 @@ extension RevenueCatService: PurchasesDelegate {
             let isProActive = customerInfo.entitlements["Pro"]?.isActive == true
             self.isProUser = isProActive
             print("🔄 Customer info updated - Pro status: \(isProActive)")
+        }
+    }
+}
+
+struct RevenueCatTimeoutError: Error {
+    let localizedDescription = "RevenueCat operation timed out"
+}
+
+// MARK: - RevenueCat Paywall UI Methods
+extension RevenueCatService {
+    
+    /// Present RevenueCat's native paywall UI
+    @MainActor
+    func presentPaywall() async -> Bool {
+        guard let currentOffering = currentOffering else {
+            print("❌ No offering available for paywall")
+            await fetchOfferings()
+            guard let offering = currentOffering else {
+                error = "No subscription options available"
+                return false
+            }
+            return await presentPaywall(offering: offering)
+        }
+        
+        return await presentPaywall(offering: currentOffering)
+    }
+    
+    /// Present RevenueCat's native paywall UI with specific offering
+    @MainActor
+    private func presentPaywall(offering: Offering) async -> Bool {
+        isLoading = true
+        error = nil
+        
+        do {
+            // RevenueCat's PaywallView will be presented by the calling view
+            print("✅ Paywall data prepared for offering: \(offering.identifier)")
+            isLoading = false
+            return true
+        } catch {
+            self.error = "Failed to prepare paywall: \(error.localizedDescription)"
+            isLoading = false
+            print("❌ Paywall preparation failed: \(error)")
+            return false
         }
     }
 }

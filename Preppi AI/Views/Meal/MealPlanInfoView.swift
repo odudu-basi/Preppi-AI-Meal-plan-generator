@@ -126,7 +126,7 @@ struct MealPlanInfoView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
             
-            Text("Select up to 3 cuisines to personalize your weekly dinner plan")
+            Text("Select up to 3 cuisines to personalize your weekly \(appState.currentMealTypeBeingCreated) plan")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

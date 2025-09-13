@@ -102,8 +102,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.4), value: appState.hasProAccess)
         .animation(.easeInOut(duration: 0.4), value: appState.isCheckingEntitlements)
         .onAppear {
-            // Debug: Print current user info
-            appState.printUserInfo()
+            // Initialize app state
         }
     }
 }
@@ -111,15 +110,25 @@ struct ContentView: View {
 // MARK: - Main Tab View
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
+    @State private var selectedTab = 0
     
     var body: some View {
-        TabView {
-            HomeView()
+        TabView(selection: $selectedTab) {
+            CameraView()
                 .environmentObject(appState)
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Home")
                 }
+                .tag(0)
+            
+            HomeView()
+                .environmentObject(appState)
+                .tabItem {
+                    Image(systemName: "fork.knife")
+                    Text("Meal Planning")
+                }
+                .tag(1)
             
             SettingsView()
                 .environmentObject(appState)
@@ -127,39 +136,44 @@ struct MainTabView: View {
                     Image(systemName: "gear")
                     Text("Settings")
                 }
+                .tag(2)
         }
         .accentColor(.green)
     }
 }
 
-// MARK: - Home View
-struct HomeView: View {
-    @EnvironmentObject var appState: AppState
-    @State private var showingFounderUpdates = false
-    @State private var navigationPath = NavigationPath()
-    @State private var selectedDate = Date()
-    @State private var weekOffset = 0
-    @Environment(\.colorScheme) var colorScheme
-    
-    private let databaseService = MealPlanDatabaseService.shared
-    @State private var dailyNutrition: DailyNutritionSummary?
-    @State private var isLoading = false
-    @State private var selectedDayMeal: DayMeal? // Dinner meal
-    @State private var selectedBreakfastMeal: DayMeal? // Breakfast meal
-    @State private var selectedLunchMeal: DayMeal? // Lunch meal
-    @State private var showingMealPlanExistsAlert = false
-    @State private var existingMealPlanWeek: String = ""
-    @State private var existingMealPlanId: UUID? // ID of existing meal plan to be replaced
-    @State private var showingShoppingList = false
-    @State private var currentMealPlanId: UUID? // For shopping list (can be any meal plan)
-    @State private var breakfastMealPlanId: UUID?
-    @State private var lunchMealPlanId: UUID?
-    @State private var dinnerMealPlanId: UUID?
-    @State private var showingMealEditPopup = false
-    
-    // Performance optimization: Cache meal plans to avoid repeated database calls
+    // MARK: - Home View
+    struct HomeView: View {
+        @EnvironmentObject var appState: AppState
+        @State private var showingFounderUpdates = false
+        @State private var navigationPath = NavigationPath()
+        @State private var selectedDate = Date()
+        @State private var weekOffset = 0
+        @Environment(\.colorScheme) var colorScheme
+        
+        private let databaseService = MealPlanDatabaseService.shared
+        @StateObject private var streakService = StreakService.shared
+        @State private var dailyNutrition: DailyNutritionSummary?
+        @State private var isLoading = false
+        @State private var selectedDayMeal: DayMeal? // Dinner meal
+        @State private var selectedBreakfastMeal: DayMeal? // Breakfast meal
+        @State private var selectedLunchMeal: DayMeal? // Lunch meal
+        @State private var showingMealPlanExistsAlert = false
+        @State private var existingMealPlanWeek: String = ""
+        @State private var existingMealPlanId: UUID? // ID of existing meal plan to be replaced
+        @State private var showingShoppingList = false
+        @State private var currentMealPlanId: UUID? // For shopping list (can be any meal plan)
+        @State private var breakfastMealPlanId: UUID?
+        @State private var lunchMealPlanId: UUID?
+        @State private var dinnerMealPlanId: UUID?
+        @State private var showingMealEditPopup = false
+        @State private var showingStreakDetails = false
+        
+            // Performance optimization: Cache meal plans to avoid repeated database calls
     @State private var cachedMealPlans: [DatabaseMealPlan] = []
     @State private var lastMealPlansUpdate: Date = Date.distantPast
+    
+
     
     // MARK: - Helper Functions
     
@@ -264,7 +278,13 @@ struct HomeView: View {
             .onAppear {
                 loadDailyNutrition()
                 loadSelectedDayMeal()
+                streakService.loadStreakData()
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                // Refresh streak data when app becomes active
+                streakService.refreshStreakData()
+            }
+
             .onChange(of: selectedDate) { _ in
                 loadDailyNutrition()
                 loadSelectedDayMeal()
@@ -302,6 +322,10 @@ struct HomeView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingStreakDetails) {
+            StreakDetailsView()
+                .environmentObject(streakService)
+        }
     }
     
     // MARK: - Top Section
@@ -326,10 +350,31 @@ struct HomeView: View {
                 
                 Spacer()
                 
-                // Empty space for balance
-                Image(systemName: "info.circle")
-                    .font(.title2)
-                    .foregroundColor(.clear)
+                // Streak counter
+                Button(action: {
+                    showingStreakDetails = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        Text("\(streakService.currentStreak)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.orange.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
+
             }
             .padding(.horizontal, 20)
             .padding(.top, 10)
@@ -386,6 +431,7 @@ struct HomeView: View {
                             date: date,
                             isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
                             isToday: Calendar.current.isDate(date, inSameDayAs: Date()),
+                            isComplete: streakService.dayIsComplete[date] ?? false,
                             action: {
                                 selectedDate = date
                             }
@@ -491,13 +537,23 @@ struct HomeView: View {
     private var caloriesCard: some View {
         HStack {
             VStack(alignment: .leading, spacing: 8) {
-                Text("\(totalCaloriesForSelectedDay)")
+                Text("\(remainingCaloriesForSelectedDay)")
                     .font(.system(size: 48, weight: .bold, design: .default))
                     .foregroundColor(.primary)
                 
-                Text("Total calories")
+                Text("Remaining calories")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                
+                if totalCaloriesForSelectedDay - remainingCaloriesForSelectedDay > 0 {
+                    Text("Consumed: \(totalCaloriesForSelectedDay - remainingCaloriesForSelectedDay) cal")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                
+                Text("Goal: \(totalCaloriesForSelectedDay) cal")
+                    .font(.caption)
+                    .foregroundColor(Color.gray.opacity(0.6))
             }
             
             Spacer()
@@ -511,15 +567,22 @@ struct HomeView: View {
                 Circle()
                     .trim(from: 0, to: CGFloat(caloriesProgress))
                     .stroke(
-                        Color.orange,
+                        progressRingColor,
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
                     )
                     .frame(width: 80, height: 80)
                     .rotationEffect(.degrees(-90))
                 
-                Image(systemName: "flame.fill")
-                    .font(.title2)
-                    .foregroundColor(.orange)
+                VStack(spacing: 2) {
+                    Image(systemName: "flame.fill")
+                        .font(.title2)
+                        .foregroundColor(progressRingColor)
+                    
+                    Text("\(Int(caloriesProgress * 100))%")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(progressRingColor)
+                }
             }
         }
         .padding(20)
@@ -566,25 +629,45 @@ struct HomeView: View {
         return CalorieCalculationService.shared.calculateDailyCalorieGoal(for: appState.userData)
     }
     
+    private var remainingCaloriesForSelectedDay: Int {
+        let dailyGoal = totalCaloriesForSelectedDay
+        var consumedCalories = 0
+        
+        // Get completed meals for the selected date
+        let normalizedDate = normalizeDate(selectedDate)
+        let mealsForDate = streakService.weekCompletions[normalizedDate] ?? []
+        
+        // Calculate consumed calories from completed meals
+        for mealInstance in mealsForDate {
+            if mealInstance.completion != .none {
+                // Find the corresponding meal to get its calories
+                if let meal = getMealForType(mealInstance.mealType) {
+                    consumedCalories += meal.calories
+                }
+            }
+        }
+        
+        // Return remaining calories (daily goal - consumed)
+        return max(0, dailyGoal - consumedCalories)
+    }
+    
     private var caloriesProgress: Double {
         let dailyGoal = Double(totalCaloriesForSelectedDay)
-        var plannedCalories = 0.0
+        let remainingCalories = Double(remainingCaloriesForSelectedDay)
         
-        // Add up calories from planned meals
-        if let breakfastMeal = selectedBreakfastMeal {
-            plannedCalories += Double(breakfastMeal.meal.calories)
+        // Return progress as percentage of remaining calories (higher percentage means more calories remaining)
+        return dailyGoal > 0 ? min(remainingCalories / dailyGoal, 1.0) : 0.0
+    }
+    
+    private var progressRingColor: Color {
+        let progress = caloriesProgress
+        if progress > 0.7 {
+            return .green // Lots of calories remaining
+        } else if progress > 0.3 {
+            return .orange // Moderate calories remaining
+        } else {
+            return .red // Few calories remaining
         }
-        
-        if let lunchMeal = selectedLunchMeal {
-            plannedCalories += Double(lunchMeal.meal.calories)
-        }
-        
-        if let dinnerMeal = selectedDayMeal {
-            plannedCalories += Double(dinnerMeal.meal.calories)
-        }
-        
-        // Return progress as percentage of daily goal
-        return dailyGoal > 0 ? min(plannedCalories / dailyGoal, 1.0) : 0.0
     }
     
     private var weekDays: [Date] {
@@ -634,8 +717,17 @@ struct HomeView: View {
     
     // MARK: - Meal Card Views
     private func simplifiedMealCard(dayMeal: DayMeal, mealType: String) -> some View {
-        NavigationLink(destination: MealDetailView(dayMeal: dayMeal, mealType: mealType).environmentObject(appState)) {
-            HStack(spacing: 16) {
+        HStack(spacing: 16) {
+            // Meal info and completion check (left side)
+            HStack(spacing: 12) {
+                // Completion check button
+                MealCompletionButton(
+                    date: selectedDate,
+                    mealType: mealType,
+                    currentCompletion: getCurrentCompletion(for: selectedDate, mealType: mealType),
+                    streakService: streakService
+                )
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(dayMeal.meal.name)
                         .font(.headline)
@@ -647,38 +739,69 @@ struct HomeView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
+            }
+            
+            Spacer()
+            
+            // Calories (right side)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("\(dayMeal.meal.calories)")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.orange)
                 
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(dayMeal.meal.calories)")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.orange)
-                    
-                    Text("calories")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
+                Text("calories")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Navigation arrow
+            NavigationLink(destination: MealDetailView(dayMeal: dayMeal, mealType: mealType).environmentObject(appState)) {
                 Image(systemName: "chevron.right")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.systemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 2)
-                    )
-                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-            )
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 2)
+                )
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+        .overlay(
+            // Completion overlay
+            Group {
+                if let completion = getCurrentCompletion(for: selectedDate, mealType: mealType),
+                   completion != .none {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text(completion == .ateExact ? "Exact" : "Similar")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(completion == .ateExact ? Color.green : Color.blue)
+                                )
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        Spacer()
                     }
+                    .padding(.top, 8)
+                    .padding(.trailing, 8)
+                }
+            }
+        )
+        .opacity(getCurrentCompletion(for: selectedDate, mealType: mealType) != .none ? 0.7 : 1.0)
+    }
     
     private func selectedDayMealCard(dayMeal: DayMeal, mealType: String = "dinner") -> some View {
         VStack(spacing: 20) {
@@ -815,6 +938,45 @@ struct HomeView: View {
 
     
     // MARK: - Helper Methods
+    
+    /// Get current completion status for a meal on a specific date
+    private func getCurrentCompletion(for date: Date, mealType: String) -> MealCompletionType? {
+        let normalizedDate = normalizeDate(date)
+        let mealsForDate = streakService.weekCompletions[normalizedDate] ?? []
+        let completion = mealsForDate.first { $0.mealType == mealType }?.completion
+        
+        print("🔍 Getting completion for \(mealType) on \(normalizedDate): \(completion?.rawValue ?? "nil")")
+        print("   - Original date: \(date)")
+        print("   - Normalized date: \(normalizedDate)")
+        print("   - Available meals for date: \(mealsForDate.map { "\($0.mealType): \($0.completion)" })")
+        print("   - All available dates in weekCompletions: \(streakService.weekCompletions.keys.map { $0 }.sorted())")
+        
+        return completion
+    }
+    
+    /// Normalize a date to midnight in the user's local timezone
+    private func normalizeDate(_ date: Date) -> Date {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return calendar.date(from: components) ?? date
+    }
+    
+    /// Get the meal for a specific meal type on the selected date
+    private func getMealForType(_ mealType: String) -> Meal? {
+        switch mealType.lowercased() {
+        case "breakfast":
+            return selectedBreakfastMeal?.meal
+        case "lunch":
+            return selectedLunchMeal?.meal
+        case "dinner":
+            return selectedDayMeal?.meal
+        default:
+            return nil
+        }
+    }
+    
+
+    
     private func loadDailyNutrition() {
         isLoading = true
         
@@ -1027,6 +1189,8 @@ struct HomeView: View {
                     
                     // Set currentMealPlanId for shopping list (prefer dinner, then lunch, then breakfast)
                     currentMealPlanId = dinnerPlanId ?? lunchPlanId ?? breakfastPlanId
+                    
+
                 }
                 
             } catch {
@@ -2066,6 +2230,7 @@ struct DayCircle: View {
     let date: Date
     let isSelected: Bool
     let isToday: Bool
+    let isComplete: Bool
     let action: () -> Void
     
     private var dayFormatter: DateFormatter {
@@ -2099,7 +2264,10 @@ struct DayCircle: View {
                     .fill(isSelected ? Color.green : Color.clear)
                     .overlay(
                         Circle()
-                            .stroke(isToday && !isSelected ? Color.green : Color.clear, lineWidth: 1)
+                            .stroke(
+                                isComplete ? Color.orange : (isToday && !isSelected ? Color.green : Color.clear),
+                                lineWidth: isComplete ? 2 : 1
+                            )
                     )
             )
         }
@@ -2331,6 +2499,409 @@ struct MealEditPopupView: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+}
+
+// MARK: - Meal Completion Button
+struct MealCompletionButton: View {
+    let date: Date
+    let mealType: String
+    let currentCompletion: MealCompletionType?
+    
+    @ObservedObject var streakService: StreakService
+    @State private var showingCompletionSheet = false
+    
+    var body: some View {
+        Button(action: {
+            showingCompletionSheet = true
+        }) {
+            Image(systemName: currentCompletion?.icon ?? "circle")
+                .font(.title3)
+                .foregroundColor(currentCompletion?.color ?? .gray)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showingCompletionSheet) {
+            MealCompletionSheet(
+                date: date,
+                mealType: mealType,
+                currentCompletion: currentCompletion ?? .none,
+                streakService: streakService
+            )
+        }
+    }
+}
+
+// MARK: - Meal Completion Sheet
+struct MealCompletionSheet: View {
+    let date: Date
+    let mealType: String
+    let currentCompletion: MealCompletionType
+    
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var streakService: StreakService
+    @State private var localCompletion: MealCompletionType
+    @State private var isUpdating = false
+    
+    init(date: Date, mealType: String, currentCompletion: MealCompletionType, streakService: StreakService) {
+        self.date = date
+        self.mealType = mealType
+        self.currentCompletion = currentCompletion
+        self.streakService = streakService
+        self._localCompletion = State(initialValue: currentCompletion)
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Text("Mark \(mealType.capitalized) Complete")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                    
+                    Text("Did you eat this meal today?")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 20)
+                
+                // Completion options
+                VStack(spacing: 16) {
+                    // Ate exact meal
+                    exactMealButton
+                    
+                    // Ate similar meal
+                    similarMealButton
+                    
+                    // Undo completion
+                    if localCompletion != .none {
+                        undoButton
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 32)
+                
+                // Save button
+                if localCompletion != currentCompletion {
+                    saveButton
+                }
+                
+                Spacer()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .fontWeight(.medium)
+                    .foregroundColor(.green)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+    
+    // MARK: - Button Views
+    
+    private var exactMealButton: some View {
+        Button(action: {
+            updateCompletion(.ateExact)
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: localCompletion == .ateExact ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.title2)
+                    .foregroundColor(localCompletion == .ateExact ? .green : .gray)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("✅ I ate this meal")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text("Exactly as planned")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if localCompletion == .ateExact {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.green)
+                        .font(.title3)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(exactMealButtonBackground)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isUpdating)
+    }
+    
+    private var similarMealButton: some View {
+        Button(action: {
+            updateCompletion(.ateSimilar)
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: localCompletion == .ateSimilar ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.title2)
+                    .foregroundColor(localCompletion == .ateSimilar ? .blue : .gray)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("🟡 I ate something similar")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text("Similar to what was planned")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if localCompletion == .ateSimilar {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.blue)
+                        .font(.title3)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(similarMealButtonBackground)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isUpdating)
+    }
+    
+    private var undoButton: some View {
+        Button(action: {
+            updateCompletion(.none)
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: "xmark.circle")
+                    .font(.title2)
+                    .foregroundColor(.red)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("❌ Undo completion")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text("Mark as not completed")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(undoButtonBackground)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isUpdating)
+    }
+    
+    private var saveButton: some View {
+        Button(action: {
+            saveCompletion()
+        }) {
+            HStack {
+                if isUpdating {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                    Text("Saving...")
+                } else {
+                    Text("Save Changes")
+                }
+            }
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.green)
+            )
+        }
+        .disabled(isUpdating)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+    }
+    
+    // MARK: - Background Views
+    
+    private var exactMealButtonBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(localCompletion == .ateExact ? Color.green.opacity(0.2) : Color.green.opacity(0.1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(localCompletion == .ateExact ? Color.green : Color.green.opacity(0.3), lineWidth: localCompletion == .ateExact ? 2 : 1)
+            )
+    }
+    
+    private var similarMealButtonBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(localCompletion == .ateSimilar ? Color.blue.opacity(0.2) : Color.blue.opacity(0.1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(localCompletion == .ateSimilar ? Color.blue : Color.blue.opacity(0.3), lineWidth: localCompletion == .ateSimilar ? 2 : 1)
+            )
+    }
+    
+    private var undoButtonBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.red.opacity(0.1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
+            )
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func updateCompletion(_ completion: MealCompletionType) {
+        localCompletion = completion
+    }
+    
+    private func saveCompletion() {
+        guard localCompletion != currentCompletion else { return }
+        
+        isUpdating = true
+        
+        Task {
+            do {
+                try await streakService.markMeal(date: date, mealType: mealType, as: localCompletion)
+                await MainActor.run {
+                    isUpdating = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isUpdating = false
+                    print("❌ Error saving completion: \(error)")
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Streak Details View
+struct StreakDetailsView: View {
+    @EnvironmentObject var streakService: StreakService
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "flame.fill")
+                            .font(.title)
+                            .foregroundColor(.orange)
+                        
+                        Text("Your Streaks")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Text("Track your meal completion consistency")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 20)
+                
+                // Streak stats
+                VStack(spacing: 20) {
+                    // Current streak
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Current Streak")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            
+                            Text("\(streakService.currentStreak) days")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.orange)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "flame.fill")
+                            .font(.title)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.orange.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                    
+                    // Best streak
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Best Streak")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            
+                            Text("\(streakService.bestStreak) days")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "trophy.fill")
+                            .font(.title)
+                            .foregroundColor(.green)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.green.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                }
+            }
+        }
     }
 }
 

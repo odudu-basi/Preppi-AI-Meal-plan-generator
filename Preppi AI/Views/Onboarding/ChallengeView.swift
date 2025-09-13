@@ -16,74 +16,74 @@ struct ChallengeView: View {
     
     var body: some View {
         OnboardingContainer {
-            VStack(spacing: 20) {
-                // Progress indicator
-                OnboardingNavigationBar(
-                    currentStep: 5,
-                    totalSteps: OnboardingStep.totalSteps,
-                    canGoBack: true,
-                    onBackTapped: {
-                        coordinator.previousStep()
-                    }
-                )
-                
-                // Header Section
-                VStack(spacing: 25) {
-                    // Animated icon with gradient background
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.orange.opacity(0.1), .red.opacity(0.05)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                            .scaleEffect(animateHeader ? 1.0 : 0.8)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                        
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 45))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.orange, .red],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .scaleEffect(animateHeader ? 1.0 : 0.8)
-                    }
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    // Progress indicator
+                    OnboardingNavigationBar(
+                        currentStep: 5,
+                        totalSteps: OnboardingStep.totalSteps,
+                        canGoBack: true,
+                        onBackTapped: {
+                            coordinator.previousStep()
+                        }
+                    )
                     
-                    VStack(spacing: 15) {
-                        Text("What's your biggest challenge with meal planning right now?")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.primary, .orange],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                    // Header Section
+                    VStack(spacing: 25) {
+                        // Animated icon with gradient background
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.orange.opacity(0.1), .red.opacity(0.05)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .padding(.horizontal, 20)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
+                                .frame(width: 100, height: 100)
+                                .scaleEffect(animateHeader ? 1.0 : 0.8)
+                                .opacity(animateHeader ? 1.0 : 0.0)
+                            
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 45))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.orange, .red],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .scaleEffect(animateHeader ? 1.0 : 0.8)
+                        }
                         
-                        Text("Select all that apply to you")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                            .opacity(animateHeader ? 1.0 : 0.0)
-                            .offset(y: animateHeader ? 0 : 20)
+                        VStack(spacing: 15) {
+                            Text("What's your biggest challenge with meal planning right now?")
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.primary, .orange],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .multilineTextAlignment(.center)
+                                .lineLimit(3)
+                                .padding(.horizontal, 20)
+                                .opacity(animateHeader ? 1.0 : 0.0)
+                                .offset(y: animateHeader ? 0 : 20)
+                            
+                            Text("Select all that apply to you")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                                .opacity(animateHeader ? 1.0 : 0.0)
+                                .offset(y: animateHeader ? 0 : 20)
+                        }
                     }
-                }
-                .padding(.top, 10)
-                
-                // Challenge Options
-                ScrollView(showsIndicators: false) {
+                    .padding(.top, 10)
+                    
+                    // Challenge Options
                     VStack(spacing: 16) {
                         ForEach(Array(Challenge.allCases.enumerated()), id: \.element.id) { index, challenge in
                             ChallengeOptionCard(
@@ -97,16 +97,17 @@ struct ChallengeView: View {
                         }
                     }
                     .padding(.horizontal, 20)
+                    
+                    // Continue Button
+                    ChallengeContinueButton(
+                        isEnabled: !coordinator.userData.challenges.isEmpty,
+                        animateContent: animateContent
+                    ) {
+                        requestReviewAndContinue()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40) // Add bottom padding for better spacing
                 }
-                
-                // Continue Button
-                ChallengeContinueButton(
-                    isEnabled: !coordinator.userData.challenges.isEmpty,
-                    animateContent: animateContent
-                ) {
-                    requestReviewAndContinue()
-                }
-                .padding(.horizontal, 20)
             }
         }
         .onAppear {
@@ -134,16 +135,13 @@ struct ChallengeView: View {
         // Set flag to indicate we're requesting review
         isRequestingReview = true
         
-        // Request Apple review
-        if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-            SKStoreReviewController.requestReview(in: scene)
-        }
+        // For now, skip App Store review to simplify app flow during debugging
+        // TODO: Re-enable once TestFlight issues are resolved
+        print("⏭️ App Store review temporarily disabled for debugging")
         
-        // Small delay to allow review prompt to appear, then navigate
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isRequestingReview = false
-            coordinator.nextStep()
-        }
+        // Continue immediately without review prompt
+        isRequestingReview = false
+        coordinator.nextStep()
     }
 }
 

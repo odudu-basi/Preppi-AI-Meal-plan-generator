@@ -1,9 +1,10 @@
 import SwiftUI
 import RevenueCat
-import RevenueCatUI
+import SuperwallKit
 
 struct OnboardingPaywallView: View {
     @StateObject private var revenueCatService = RevenueCatService.shared
+    @StateObject private var superwallService = SuperwallService.shared
     @Binding var isPurchaseCompleted: Bool
     
     var body: some View {
@@ -18,49 +19,32 @@ struct OnboardingPaywallView: View {
                         .foregroundColor(.secondary)
                         .padding(.top)
                 }
-            } else if let offering = revenueCatService.currentOffering {
-                // Show ONLY your RevenueCat paywall - no custom UI
-                RevenueCatUI.PaywallView(offering: offering)
-                    .onPurchaseCompleted { customerInfo in
-                        // Check if pro entitlement is active after purchase
-                        if customerInfo.entitlements["Pro"]?.isActive == true {
-                            isPurchaseCompleted = true
-                        }
-                    }
-                    .onRestoreCompleted { customerInfo in
-                        // Check if pro entitlement is active after restore
-                        if customerInfo.entitlements["Pro"]?.isActive == true {
-                            isPurchaseCompleted = true
-                        }
-                    }
             } else {
-                // If no offering is available, show retry
-                VStack(spacing: 20) {
-                    Text("Unable to load subscription options")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Text("Please check your internet connection and try again")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    Button("Retry") {
-                        Task {
-                            await revenueCatService.fetchOfferings()
+                // Show Superwall paywall
+                VStack {
+                    Color.clear
+                        .onAppear {
+                            presentOnboardingPaywall()
                         }
+                    
+                    // Fallback UI
+                    VStack(spacing: 20) {
+                        Text("Unlock Premium Features")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("Get access to unlimited meal plans and AI-powered recipes.")
+                            .font(.body)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                        
+                        Button("Continue") {
+                            presentOnboardingPaywall()
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.green)
-                    .cornerRadius(25)
-                    .padding(.horizontal)
+                    .padding()
                 }
-                .padding()
             }
             
             if let error = revenueCatService.error {
@@ -109,9 +93,19 @@ struct OnboardingPaywallView: View {
             }
         }
     }
+    
+    private func presentOnboardingPaywall() {
+        print("🎯 Presenting Superwall onboarding paywall...")
+        
+        SuperwallService.shared.presentPaywall(
+            for: "campaign_trigger",
+            parameters: [
+                "source": "onboarding",
+                "user_type": "new"
+            ]
+        )
+    }
 }
-
-
 
 #Preview {
     OnboardingPaywallView(isPurchaseCompleted: .constant(false))

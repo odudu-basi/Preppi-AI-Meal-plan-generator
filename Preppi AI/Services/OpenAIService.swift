@@ -570,7 +570,7 @@ class OpenAIService: ObservableObject {
             "prompt": prompt,
             "n": 1,
             "size": "1024x1024",
-            "quality": "standard",
+            "quality": "hd",
             "style": "natural"
         ]
         
@@ -652,7 +652,7 @@ class OpenAIService: ObservableObject {
             "prompt": prompt,
             "n": 1,
             "size": "1024x1024",
-            "quality": "standard",
+            "quality": "hd",
             "style": "natural"
         ]
         
@@ -704,22 +704,42 @@ class OpenAIService: ObservableObject {
     }
     
     private func createImagePrompt(for meal: Meal) -> String {
+        // Extract ingredients for more realistic context
+        let ingredientContext = meal.ingredients.prefix(5).joined(separator: ", ")
+        
         return """
-        Create a high-quality, appetizing food photography image of "\(meal.name)". 
+        Create a photorealistic, professional food photography image of "\(meal.name)".
         
-        Description: \(meal.description)
+        Meal Description: \(meal.description)
+        Key Ingredients: \(ingredientContext)
         
-        The image should show:
-        - Professional food photography style
-        - Beautiful plating and presentation
-        - Natural lighting
-        - Restaurant-quality appearance
-        - Fresh, vibrant colors
-        - Appetizing and mouth-watering
-        - Clean, minimalist background
-        - High detail and clarity
+        Technical Photography Specifications:
+        - Shot with a high-end DSLR camera (Canon 5D Mark IV or similar)
+        - 85mm macro lens for perfect food detail capture
+        - f/2.8 aperture for shallow depth of field
+        - Natural window lighting with soft diffuser
+        - ISO 200 for minimal noise and maximum detail
+        - Professional food styling with garnish and props
         
-        Style: Professional food photography, clean and modern, studio lighting, top-down or 45-degree angle view.
+        Visual Requirements:
+        - Photorealistic textures showing every detail (steam, moisture, crispy edges, fresh herbs)
+        - Restaurant-quality plating on elegant dishware
+        - Authentic food colors and natural shadows
+        - Shallow depth of field with bokeh background
+        - Perfect focus on the main dish elements
+        - Realistic food proportions and sizing
+        - Natural imperfections that make food look real (slight irregularities, natural textures)
+        - Ambient lighting that enhances food appeal
+        - Clean, neutral background (marble, wood, or linen)
+        - Professional food styling with complementary garnishes
+        
+        Composition:
+        - 45-degree angle or slight overhead shot
+        - Rule of thirds composition
+        - Negative space for visual balance
+        - Depth and dimension showing food layers/height
+        
+        Style: Hyperrealistic food photography, magazine-quality, commercial food advertising style, natural and appetizing.
         """
     }
 }

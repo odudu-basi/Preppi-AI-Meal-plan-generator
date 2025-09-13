@@ -1,116 +1,103 @@
 import SwiftUI
 import RevenueCat
-import RevenueCatUI
+import SuperwallKit
 
 struct PaywallRequiredView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var revenueCatService = RevenueCatService.shared
+    @StateObject private var superwallService = SuperwallService.shared
+    @State private var isCheckingEntitlements = true
     
     var body: some View {
         Group {
-            if revenueCatService.isLoading {
-                // Loading state
-                VStack {
+            if isCheckingEntitlements {
+                // Show loading while checking entitlements
+                VStack(spacing: 16) {
                     ProgressView()
                         .scaleEffect(1.5)
-                    Text("Loading subscription options...")
+                    Text("Checking subscription status...")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                        .padding(.top)
                 }
-            } else if let offering = revenueCatService.currentOffering {
-                // Show ONLY your RevenueCat paywall - no custom UI
-                RevenueCatUI.PaywallView(offering: offering)
-                    .onPurchaseCompleted { customerInfo in
-                        // Check if pro entitlement is active after purchase
-                        if customerInfo.entitlements["Pro"]?.isActive == true {
-                            // Purchase completed, user can now access main app
-                            print("✅ Purchase completed in PaywallRequiredView")
-                        }
-                    }
-                    .onRestoreCompleted { customerInfo in
-                        // Check if pro entitlement is active after restore
-                        if customerInfo.entitlements["Pro"]?.isActive == true {
-                            print("✅ Restore completed in PaywallRequiredView")
-                        }
-                    }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color("AppBackground"))
             } else {
-                // If no offering is available, show retry
+                // Show Superwall paywall or fallback
                 VStack(spacing: 20) {
-                    Text("Unable to load subscription options")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+                    Text("Premium Required")
+                        .font(.title2)
+                        .fontWeight(.bold)
                     
-                    Text("Please check your internet connection and try again")
+                    Text("To continue using Preppi AI, please upgrade to premium.")
                         .font(.body)
-                        .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .foregroundColor(.secondary)
                     
-                    Button("Retry") {
-                        Task {
-                            await revenueCatService.fetchOfferings()
-                        }
+                    Button("View Plans") {
+                        presentSuperwall()
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.green)
-                    .cornerRadius(25)
-                    .padding(.horizontal)
+                    .buttonStyle(.borderedProminent)
                 }
                 .padding()
-            }
-            
-            if let error = revenueCatService.error {
-                VStack {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                    
-                    Button("Retry") {
-                        Task {
-                            await revenueCatService.fetchOfferings()
-                        }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color("AppBackground"))
+                .onAppear {
+                    // Auto-present Superwall when view appears
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        presentSuperwall()
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.green)
-                    .cornerRadius(25)
-                    .padding(.horizontal)
                 }
             }
         }
-        .interactiveDismissDisabled(true) // Prevent swipe to dismiss
         .onAppear {
-            // Force refresh entitlements when paywall appears
-            Task {
-                print("🔄 PaywallRequiredView appeared - force refreshing entitlements...")
-                let hasProAccess = await revenueCatService.forceRefreshCustomerInfo()
-                
-                if hasProAccess {
-                    print("✅ User actually has Pro access - this paywall shouldn't be showing")
-                    // User has Pro access, this view should not be visible
-                    return
-                } else {
-                    print("❌ User confirmed to not have Pro access - showing paywall")
-                    // Ensure offerings are loaded for paywall
-                    await revenueCatService.fetchOfferings()
-                }
-            }
+            setupPaywall()
         }
         .onChange(of: revenueCatService.isProUser) { oldValue, newValue in
             if newValue {
-                // User purchased Pro, AppState will handle the transition
-                print("✅ Pro status changed to: \(newValue)")
+                print("✅ Pro status changed to: \(newValue) - paywall will dismiss")
+                handlePurchaseSuccess()
             }
         }
+    }
+    
+    private func setupPaywall() {
+        Task {
+            print("🔄 PaywallRequiredView appeared - setting up RevenueCat paywall...")
+            
+            // First, force refresh entitlements to double-check
+            print("🔍 Checking RevenueCat entitlements...")
+            let hasProAccess = await revenueCatService.forceRefreshCustomerInfo()
+            print("🔍 RevenueCat entitlements result: hasProAccess = \(hasProAccess)")
+            
+            if hasProAccess {
+                print("✅ User actually has Pro access - this paywall shouldn't be showing")
+                isCheckingEntitlements = false
+                handlePurchaseSuccess()
+                return
+            }
+            
+            print("❌ User confirmed to not have Pro access - preparing Superwall paywall")
+            
+            await MainActor.run {
+                isCheckingEntitlements = false
+            }
+        }
+    }
+    
+    private func presentSuperwall() {
+        print("🎯 Presenting Superwall paywall...")
+        
+        SuperwallService.shared.presentPaywall(
+            for: "campaign_trigger",
+            parameters: [
+                "source": "paywall_required",
+                "user_type": "existing"
+            ]
+        )
+    }
+    
+    private func handlePurchaseSuccess() {
+        appState.handlePostOnboardingPurchaseCompletion()
     }
 }
 

@@ -89,6 +89,19 @@ extension MixpanelService {
         
         // Meal Button Interactions
         static let mealButtonTapped = "Meal Button Tapped"
+        
+        // Camera & Recipe Features
+        static let takePhotoButtonTapped = "Take Photo Button Tapped"
+        static let photoProcessingStarted = "Photo Processing Started"
+        static let recipeGeneratedFromPhoto = "Recipe Generated From Photo"
+        
+        // Cookbook Features
+        static let viewCookbooksButtonTapped = "View Cookbooks Button Tapped"
+        static let addToCookbookButtonTapped = "Add to Cookbook Button Tapped"
+        static let createCookbookButtonTapped = "Create Cookbook Button Tapped"
+        static let cookbookCreated = "Cookbook Created"
+        static let recipeAddedToCookbook = "Recipe Added to Cookbook"
+        static let recipeDeletedFromCookbook = "Recipe Deleted from Cookbook"
     }
 }
 
@@ -116,5 +129,19 @@ extension MixpanelService {
         // App Properties
         static let screenName = "screen_name"
         static let source = "source"
+        
+        // Camera & Recipe Properties
+        static let sourceType = "source_type" // "camera" or "photo_library"
+        static let servings = "servings"
+        static let contextProvided = "context_provided"
+        static let difficultyRating = "difficulty_rating"
+        
+        // Cookbook Properties
+        static let cookbookId = "cookbook_id"
+        static let cookbookName = "cookbook_name"
+        static let recipeId = "recipe_id"
+        static let recipeName = "recipe_name"
+        static let totalCookbooks = "total_cookbooks"
+        static let totalRecipes = "total_recipes"
     }
 }

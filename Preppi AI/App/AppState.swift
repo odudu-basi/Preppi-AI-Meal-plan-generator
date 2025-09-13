@@ -152,28 +152,55 @@ final class AppState: ObservableObject {
     // MARK: - Pro Access Management
     private func checkProAccess() {
         Task {
-            // Force refresh entitlements on app launch
-            print("🚀 App launched - force refreshing entitlements...")
-            await revenueCatService.forceRefreshCustomerInfo()
-            await revenueCatService.fetchOfferings()
+            // Only force refresh entitlements if we haven't checked recently
+            let lastCheck = UserDefaults.standard.double(forKey: "lastEntitlementCheck")
+            let now = Date().timeIntervalSince1970
+            
+            // Check if it's been more than 5 minutes since last check
+            if now - lastCheck > 300 { // 5 minutes
+                print("🚀 App launched - force refreshing entitlements (last check: \(Int(now - lastCheck))s ago)...")
+                await revenueCatService.forceRefreshCustomerInfo()
+                await revenueCatService.fetchOfferings()
+                UserDefaults.standard.set(now, forKey: "lastEntitlementCheck")
+            } else {
+                print("🚀 App launched - skipping entitlement refresh (checked \(Int(now - lastCheck))s ago)")
+            }
         }
     }
     
     private func handleUserSignIn() {
-        print("🔑 User signed in - loading profile and checking entitlements...")
+        print("🔑 User signed in - starting profile load and entitlement check...")
         isCheckingEntitlements = true
         
         Task {
-            // First, load user profile with improved sync
-            await loadUserProfileWithSync()
-            
-            // Always check entitlements after sign in to ensure fresh data
-            print("✅ Profile loaded, force refreshing entitlements from RevenueCat...")
-            await checkEntitlements()
-            
-            self.isCheckingEntitlements = false
-            print("✅ Sign-in process completed")
-            self.printUserInfo()
+            do {
+                // Add timeout to prevent infinite loading
+                try await withTimeout(seconds: 30) {
+                    // First, load user profile with improved sync
+                    print("📥 Loading user profile...")
+                    await self.loadUserProfileWithSync()
+                    print("✅ Profile load complete")
+                    
+                    // Always check entitlements after sign in to ensure fresh data
+                    print("🎟️ Force refreshing entitlements...")
+                    await self.checkEntitlements()
+                    print("✅ Entitlements check complete")
+                }
+                
+                self.isCheckingEntitlements = false
+                print("✅ Sign-in process completed")
+                self.printUserInfo()
+            } catch {
+                print("❌ Sign-in process failed or timed out: \(error)")
+                self.isCheckingEntitlements = false
+                self.errorMessage = "Failed to load user data. Please try again."
+                
+                // Force show the app even if entitlements check failed
+                // Better to show something than black screen
+                if self.isAuthenticated && self.isOnboardingComplete {
+                    print("🔄 Forcing app to show despite entitlement check failure")
+                }
+            }
         }
     }
     
@@ -291,7 +318,9 @@ final class AppState: ObservableObject {
     }
     
     var shouldShowPaywall: Bool {
-        isAuthenticated && isOnboardingComplete && !hasProAccess && !isCheckingEntitlements
+        // Show paywall if user is authenticated, completed onboarding, but doesn't have Pro access
+        // and not currently checking entitlements
+        return isAuthenticated && isOnboardingComplete && !hasProAccess && !isCheckingEntitlements
     }
     
     var shouldShowGetStarted: Bool {
@@ -332,4 +361,26 @@ final class AppState: ObservableObject {
         print("Access Main App: \(canAccessMainApp)")
         print("User Name: \(userData.name)\n")
     }
+    
+    // MARK: - Helper Functions
+    private func withTimeout<T>(seconds: Double, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw TimeoutError()
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
+}
+
+struct TimeoutError: Error {
+    let localizedDescription = "Operation timed out"
 }

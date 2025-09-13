@@ -25,8 +25,16 @@ class SupabaseService {
     }
     
     private init() {
-        guard let url = URL(string: ConfigurationService.shared.supabaseURL) else {
-            fatalError("Invalid Supabase URL")
+        let supabaseURLString = ConfigurationService.shared.supabaseURL
+        guard !supabaseURLString.isEmpty, let url = URL(string: supabaseURLString) else {
+            print("❌ Invalid or missing Supabase URL: '\(supabaseURLString)'")
+            // Create a dummy client with fallback URL to prevent crash
+            let fallbackURL = URL(string: "https://example.supabase.co")!
+            self.client = SupabaseClient(
+                supabaseURL: fallbackURL,
+                supabaseKey: "dummy-key"
+            )
+            return
         }
         
         self.client = SupabaseClient(

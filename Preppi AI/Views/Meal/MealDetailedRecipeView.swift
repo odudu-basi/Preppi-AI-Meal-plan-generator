@@ -3,6 +3,7 @@ import SwiftUI
 struct MealDetailedRecipeView: View {
     let dayMeal: DayMeal
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appState: AppState
     
     var body: some View {
         ZStack {
@@ -60,7 +61,7 @@ struct MealDetailedRecipeView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.green)
                     
-                    Text("Dinner Recipe")
+                    Text("\(appState.currentMealTypeBeingCreated.capitalized) Recipe")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -319,5 +320,6 @@ struct MealDetailedRecipeView: View {
     
     NavigationView {
         MealDetailedRecipeView(dayMeal: sampleDayMeal)
+            .environmentObject(AppState())
     }
 }

@@ -140,7 +140,7 @@ struct MealPlanningView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 
-                Text("Our AI chef is crafting personalized dinners based on your preferences...")
+                Text("Our AI chef is crafting personalized \(appState.currentMealTypeBeingCreated) recipes based on your preferences...")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -162,7 +162,7 @@ struct MealPlanningView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 
-                Text("Tap the button below to generate 7 personalized dinner recipes just for you!")
+                Text("Tap the button below to generate 7 personalized \(appState.currentMealTypeBeingCreated) recipes just for you!")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
