@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F00DB3AB2E6257E3006BA116 /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = F00DB3AA2E6257E3006BA116 /* SuperwallKit */; };
+		F014E9342EAB44240004708F /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = F014E9332EAB44240004708F /* Lottie */; };
+		F01984D82EAD3FAC002C17D9 /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = F01984D72EAD3FAC002C17D9 /* SuperwallKit */; };
 		F03CA1702E39A31B002E41C9 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA16F2E39A31B002E41C9 /* Auth */; };
 		F03CA1722E39A31B002E41C9 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1712E39A31B002E41C9 /* Functions */; };
 		F03CA1742E39A31B002E41C9 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = F03CA1732E39A31B002E41C9 /* PostgREST */; };
@@ -19,6 +20,7 @@
 		F0B7A2FF2E45D161008EFBEC /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = F0B7A2FE2E45D161008EFBEC /* Mixpanel */; };
 		F0F0E6C02E3710510035BB38 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F0F0E6BF2E3710510035BB38 /* RevenueCat */; };
 		F0F0E6C22E3710510035BB38 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = F0F0E6C12E3710510035BB38 /* RevenueCatUI */; };
+		F0FBD8262E75C6F500CC7C42 /* Preppi AI Share Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F0FBD81C2E75C6F400CC7C42 /* Preppi AI Share Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,13 +38,45 @@
 			remoteGlobalIDString = F06E8ED72E33520D004256EE;
 			remoteInfo = "Preppi AI";
 		};
+		F0FBD8242E75C6F500CC7C42 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F06E8ED02E33520D004256EE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F0FBD81B2E75C6F400CC7C42;
+			remoteInfo = "Preppi AI Share Extension";
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F0FBD82B2E75C6F500CC7C42 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F0FBD8262E75C6F500CC7C42 /* Preppi AI Share Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		F06E8ED82E33520D004256EE /* Preppi AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Preppi AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F06E8EE82E33520F004256EE /* Preppi AITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Preppi AITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F06E8EF22E33520F004256EE /* Preppi AIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Preppi AIUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0FBD81C2E75C6F400CC7C42 /* Preppi AI Share Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Preppi AI Share Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F0FBD8272E75C6F500CC7C42 /* Exceptions for "Preppi AI Share Extension" folder in "Preppi AI Share Extension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F0FBD81B2E75C6F400CC7C42 /* Preppi AI Share Extension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F06E8EDA2E33520D004256EE /* Preppi AI */ = {
@@ -60,6 +94,14 @@
 			path = "Preppi AIUITests";
 			sourceTree = "<group>";
 		};
+		F0FBD81D2E75C6F400CC7C42 /* Preppi AI Share Extension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F0FBD8272E75C6F500CC7C42 /* Exceptions for "Preppi AI Share Extension" folder in "Preppi AI Share Extension" target */,
+			);
+			path = "Preppi AI Share Extension";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,6 +109,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F014E9342EAB44240004708F /* Lottie in Frameworks */,
 				F0618F5F2E3E536500FBEB00 /* Supabase in Frameworks */,
 				F03CA17F2E39A48E002E41C9 /* GoogleSignInSwift in Frameworks */,
 				F0F0E6C22E3710510035BB38 /* RevenueCatUI in Frameworks */,
@@ -74,11 +117,11 @@
 				F0F0E6C02E3710510035BB38 /* RevenueCat in Frameworks */,
 				F03CA1782E39A31B002E41C9 /* Storage in Frameworks */,
 				F03CA1722E39A31B002E41C9 /* Functions in Frameworks */,
+				F01984D82EAD3FAC002C17D9 /* SuperwallKit in Frameworks */,
 				F03CA1762E39A31B002E41C9 /* Realtime in Frameworks */,
 				F03CA1702E39A31B002E41C9 /* Auth in Frameworks */,
 				F03CA1742E39A31B002E41C9 /* PostgREST in Frameworks */,
 				F0B7A2FF2E45D161008EFBEC /* Mixpanel in Frameworks */,
-				F00DB3AB2E6257E3006BA116 /* SuperwallKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +133,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F06E8EEF2E33520F004256EE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0FBD8192E75C6F400CC7C42 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -112,6 +162,7 @@
 				F06E8EDA2E33520D004256EE /* Preppi AI */,
 				F06E8EEB2E33520F004256EE /* Preppi AITests */,
 				F06E8EF52E33520F004256EE /* Preppi AIUITests */,
+				F0FBD81D2E75C6F400CC7C42 /* Preppi AI Share Extension */,
 				F03CA16D2E39A1D9002E41C9 /* Frameworks */,
 				F06E8ED92E33520D004256EE /* Products */,
 			);
@@ -123,6 +174,7 @@
 				F06E8ED82E33520D004256EE /* Preppi AI.app */,
 				F06E8EE82E33520F004256EE /* Preppi AITests.xctest */,
 				F06E8EF22E33520F004256EE /* Preppi AIUITests.xctest */,
+				F0FBD81C2E75C6F400CC7C42 /* Preppi AI Share Extension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -137,10 +189,12 @@
 				F06E8ED42E33520D004256EE /* Sources */,
 				F06E8ED52E33520D004256EE /* Frameworks */,
 				F06E8ED62E33520D004256EE /* Resources */,
+				F0FBD82B2E75C6F500CC7C42 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F0FBD8252E75C6F500CC7C42 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F06E8EDA2E33520D004256EE /* Preppi AI */,
@@ -158,7 +212,8 @@
 				F03CA17E2E39A48E002E41C9 /* GoogleSignInSwift */,
 				F0618F5E2E3E536500FBEB00 /* Supabase */,
 				F0B7A2FE2E45D161008EFBEC /* Mixpanel */,
-				F00DB3AA2E6257E3006BA116 /* SuperwallKit */,
+				F014E9332EAB44240004708F /* Lottie */,
+				F01984D72EAD3FAC002C17D9 /* SuperwallKit */,
 			);
 			productName = "Preppi AI";
 			productReference = F06E8ED82E33520D004256EE /* Preppi AI.app */;
@@ -210,6 +265,28 @@
 			productReference = F06E8EF22E33520F004256EE /* Preppi AIUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		F0FBD81B2E75C6F400CC7C42 /* Preppi AI Share Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F0FBD8282E75C6F500CC7C42 /* Build configuration list for PBXNativeTarget "Preppi AI Share Extension" */;
+			buildPhases = (
+				F0FBD8182E75C6F400CC7C42 /* Sources */,
+				F0FBD8192E75C6F400CC7C42 /* Frameworks */,
+				F0FBD81A2E75C6F400CC7C42 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F0FBD81D2E75C6F400CC7C42 /* Preppi AI Share Extension */,
+			);
+			name = "Preppi AI Share Extension";
+			packageProductDependencies = (
+			);
+			productName = "Preppi AI Share Extension";
+			productReference = F0FBD81C2E75C6F400CC7C42 /* Preppi AI Share Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -231,6 +308,9 @@
 						CreatedOnToolsVersion = 16.1;
 						TestTargetID = F06E8ED72E33520D004256EE;
 					};
+					F0FBD81B2E75C6F400CC7C42 = {
+						CreatedOnToolsVersion = 16.1;
+					};
 				};
 			};
 			buildConfigurationList = F06E8ED32E33520D004256EE /* Build configuration list for PBXProject "Preppi AI" */;
@@ -248,6 +328,7 @@
 				F03CA17B2E39A48E002E41C9 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				F0B7A2FD2E45D161008EFBEC /* XCRemoteSwiftPackageReference "mixpanel-swift" */,
 				F00DB3A92E6257E3006BA116 /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
+				F014E9322EAB44240004708F /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F06E8ED92E33520D004256EE /* Products */;
@@ -257,6 +338,7 @@
 				F06E8ED72E33520D004256EE /* Preppi AI */,
 				F06E8EE72E33520F004256EE /* Preppi AITests */,
 				F06E8EF12E33520F004256EE /* Preppi AIUITests */,
+				F0FBD81B2E75C6F400CC7C42 /* Preppi AI Share Extension */,
 			);
 		};
 /* End PBXProject section */
@@ -277,6 +359,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F06E8EF02E33520F004256EE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F0FBD81A2E75C6F400CC7C42 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -307,6 +396,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F0FBD8182E75C6F400CC7C42 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -319,6 +415,11 @@
 			isa = PBXTargetDependency;
 			target = F06E8ED72E33520D004256EE /* Preppi AI */;
 			targetProxy = F06E8EF32E33520F004256EE /* PBXContainerItemProxy */;
+		};
+		F0FBD8252E75C6F500CC7C42 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F0FBD81B2E75C6F400CC7C42 /* Preppi AI Share Extension */;
+			targetProxy = F0FBD8242E75C6F500CC7C42 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -438,6 +539,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -447,8 +549,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Preppi AI/Preppi AI.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "\"Preppi AI/Preview Content\"";
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				ENABLE_PREVIEWS = YES;
@@ -463,7 +566,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -477,8 +580,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Preppi AI/Preppi AI.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_ASSET_PATHS = "\"Preppi AI/Preview Content\"";
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				ENABLE_PREVIEWS = YES;
@@ -493,7 +597,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -507,11 +611,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -526,11 +630,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -544,10 +648,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -561,16 +665,68 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AIUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = "Preppi AI";
+			};
+			name = Release;
+		};
+		F0FBD8292E75C6F500CC7C42 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Preppi AI Share Extension/Preppi AI Share Extension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Preppi AI Share Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Preppi AI Share Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI.Preppi-AI-Share-Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F0FBD82A2E75C6F500CC7C42 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Preppi AI Share Extension/Preppi AI Share Extension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 9U7ZFP4X2B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Preppi AI Share Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Preppi AI Share Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "-5.Preppi-AI.Preppi-AI-Share-Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -613,6 +769,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		F0FBD8282E75C6F500CC7C42 /* Build configuration list for PBXNativeTarget "Preppi AI Share Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0FBD8292E75C6F500CC7C42 /* Debug */,
+				F0FBD82A2E75C6F500CC7C42 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -622,6 +787,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 4.7.0;
+			};
+		};
+		F014E9322EAB44240004708F /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.2;
 			};
 		};
 		F03CA16E2E39A31B002E41C9 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
@@ -659,7 +832,12 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		F00DB3AA2E6257E3006BA116 /* SuperwallKit */ = {
+		F014E9332EAB44240004708F /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F014E9322EAB44240004708F /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		F01984D72EAD3FAC002C17D9 /* SuperwallKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F00DB3A92E6257E3006BA116 /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
 			productName = SuperwallKit;

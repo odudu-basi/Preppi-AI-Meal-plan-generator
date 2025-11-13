@@ -165,3 +165,157 @@ struct StreakSummary: Codable {
         self.lastCompletedDate = lastCompletedDate
     }
 }
+
+// MARK: - Meal Analysis Result
+struct MealAnalysisResult {
+    let mealName: String
+    let description: String
+    let macros: Macros
+    let calories: Int
+    let healthScore: Int
+}
+
+// MARK: - Logged Meal (for scanned meals)
+struct LoggedMeal: Identifiable, Codable {
+    let id: UUID
+    let userId: UUID?
+    let mealName: String
+    let description: String
+    let macros: Macros
+    let calories: Int
+    let healthScore: Int
+    let imageUrl: String?
+    let mealType: String? // "breakfast", "lunch", "dinner", or nil for extra meals
+    let loggedAt: Date
+    let createdAt: Date
+    let updatedAt: Date
+    
+    // Local-only properties for UI
+    var imageData: Data? // Temporary storage before upload
+    
+    init(from analysisResult: MealAnalysisResult, image: UIImage?, mealType: String? = nil, userId: UUID? = nil) {
+        self.id = UUID()
+        self.userId = userId
+        self.mealName = analysisResult.mealName
+        self.description = analysisResult.description
+        self.macros = analysisResult.macros
+        self.calories = analysisResult.calories
+        self.healthScore = analysisResult.healthScore
+        self.imageUrl = nil // Will be set after upload
+        self.mealType = mealType
+        self.loggedAt = Date()
+        self.createdAt = Date()
+        self.updatedAt = Date()
+        self.imageData = image?.jpegData(compressionQuality: 0.8)
+    }
+    
+    // Database initializer
+    init(id: UUID, userId: UUID?, mealName: String, description: String, macros: Macros, calories: Int, healthScore: Int, imageUrl: String?, mealType: String?, loggedAt: Date, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.userId = userId
+        self.mealName = mealName
+        self.description = description
+        self.macros = macros
+        self.calories = calories
+        self.healthScore = healthScore
+        self.imageUrl = imageUrl
+        self.mealType = mealType
+        self.loggedAt = loggedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.imageData = nil
+    }
+    
+    var image: UIImage? {
+        guard let imageData = imageData else { return nil }
+        return UIImage(data: imageData)
+    }
+}
+
+// MARK: - Database LoggedMeal Response
+struct DatabaseLoggedMeal: Codable {
+    let id: UUID
+    let userId: UUID
+    let mealName: String
+    let description: String?
+    let calories: Int
+    let protein: Double?
+    let carbohydrates: Double?
+    let fat: Double?
+    let fiber: Double?
+    let sugar: Double?
+    let sodium: Double?
+    let healthScore: Int?
+    let imageUrl: String?
+    let mealType: String?
+    let loggedAt: String // ISO8601 string from database
+    let createdAt: String
+    let updatedAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case id, calories
+        case userId = "user_id"
+        case mealName = "meal_name"
+        case description, protein, carbohydrates, fat, fiber, sugar, sodium
+        case healthScore = "health_score"
+        case imageUrl = "image_url"
+        case mealType = "meal_type"
+        case loggedAt = "logged_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+    
+    func toLoggedMeal() -> LoggedMeal {
+        let dateFormatter = ISO8601DateFormatter()
+        
+        return LoggedMeal(
+            id: id,
+            userId: userId,
+            mealName: mealName,
+            description: description ?? "",
+            macros: Macros(
+                protein: protein ?? 0,
+                carbohydrates: carbohydrates ?? 0,
+                fat: fat ?? 0,
+                fiber: fiber ?? 0,
+                sugar: sugar ?? 0,
+                sodium: sodium ?? 0
+            ),
+            calories: calories,
+            healthScore: healthScore ?? 5,
+            imageUrl: imageUrl,
+            mealType: mealType,
+            loggedAt: dateFormatter.date(from: loggedAt) ?? Date(),
+            createdAt: dateFormatter.date(from: createdAt) ?? Date(),
+            updatedAt: dateFormatter.date(from: updatedAt) ?? Date()
+        )
+    }
+}
+
+// MARK: - Meal Insert Data (for database inserts)
+struct MealInsertData: Codable {
+    let userId: String
+    let mealName: String
+    let description: String
+    let calories: Int
+    let protein: Double
+    let carbohydrates: Double
+    let fat: Double
+    let fiber: Double
+    let sugar: Double
+    let sodium: Double
+    let healthScore: Int
+    let imageUrl: String?
+    let mealType: String?
+    let loggedAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case mealName = "meal_name"
+        case description, calories, protein, carbohydrates, fat, fiber, sugar, sodium
+        case healthScore = "health_score"
+        case imageUrl = "image_url"
+        case mealType = "meal_type"
+        case loggedAt = "logged_at"
+    }
+}

@@ -34,26 +34,48 @@ struct OnboardingView: View {
                     } else {
                         Group {
                             switch coordinator.currentStep {
+                            case .welcome:
+                                WelcomeView(coordinator: coordinator)
                             case .name:
                                 NameInputView(coordinator: coordinator)
                             case .sex:
                                 SexSelectionView(coordinator: coordinator)
+                            case .country:
+                                CountryInputView(coordinator: coordinator)
                             case .cookingPreference:
                                 CookingPreferenceView(coordinator: coordinator)
                             case .marketing:
                                 MarketingSourceView(coordinator: coordinator)
+                            case .calorieTrackingExperience:
+                                CalorieTrackingExperienceView(coordinator: coordinator)
+                            case .mealPlanningExperience:
+                                MealPlanningExperienceView(coordinator: coordinator)
                             case .motivation:
                                 MotivationView(coordinator: coordinator)
                             case .challenge:
                                 ChallengeView(coordinator: coordinator)
                             case .healthGoals:
                                 HealthGoalsView(coordinator: coordinator)
+                            case .goalConfirmation:
+                                GoalConfirmationView(coordinator: coordinator)
                             case .physicalStats:
                                 PhysicalStatsView(coordinator: coordinator)
+                            case .targetWeight:
+                                TargetWeightView(coordinator: coordinator)
+                            case .weightLossSpeed:
+                                WeightLossSpeedView(coordinator: coordinator)
+                            case .threeMonthCommitment:
+                                ThreeMonthCommitmentView(coordinator: coordinator)
+                            case .thankYou:
+                                ThankYouView(coordinator: coordinator)
                             case .dietaryRestrictions:
                                 DietaryRestrictionsView(coordinator: coordinator)
                             case .budget:
                                 BudgetView(coordinator: coordinator)
+                            case .nutritionPlanLoading:
+                                NutritionPlanLoadingView(coordinator: coordinator)
+                            case .nutritionPlanDisplay:
+                                NutritionPlanDisplayView(coordinator: coordinator)
                             }
                         }
                         .transition(.asymmetric(
@@ -70,7 +92,7 @@ struct OnboardingView: View {
         .onAppear {
             // Connect the coordinator to the app state
             coordinator.appState = appState
-            
+
             // Show loading for a brief moment
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 withAnimation(.easeOut(duration: 0.6)) {
@@ -78,8 +100,21 @@ struct OnboardingView: View {
                 }
             }
         }
+        .onChange(of: coordinator.isOnboardingComplete) { oldValue, newValue in
+            if newValue {
+                // Onboarding is complete, update AppState
+                print("✅ OnboardingView detected completion - updating AppState")
+                appState.isOnboardingComplete = true
+            }
+        }
+        .onChange(of: appState.isOnboardingComplete) { oldValue, newValue in
+            if newValue {
+                // AppState confirms onboarding complete, this view will be dismissed automatically
+                print("✅ AppState onboarding complete - OnboardingView will be dismissed")
+            }
+        }
     }
-    
+
 }
 
 // MARK: - Premium Components

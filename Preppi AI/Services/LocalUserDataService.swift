@@ -10,6 +10,19 @@ import Combine
 import PostgREST
 import Auth
 
+// MARK: - Codable Nutrition Plan Data
+struct NutritionPlanData: Codable {
+    let dailyCalories: Int
+    let dailyCarbs: Int
+    let dailyProtein: Int
+    let dailyFats: Int
+    let predictedWeightAfter3Months: Double
+    let weightChange: Double
+    let healthScore: Int
+    let healthScoreReasoning: String
+    let createdDate: String
+}
+
 class LocalUserDataService: ObservableObject {
     static let shared = LocalUserDataService()
     
@@ -85,13 +98,18 @@ class LocalUserDataService: ObservableObject {
                 email: userEmail,
                 name: userData.name,
                 sex: userData.sex?.rawValue,
+                country: userData.country,
                 age: userData.age,
                 weight: userData.weight,
                 height: userData.height,
                 likesToCook: userData.likesToCook,
                 cookingPreference: userData.cookingPreference?.rawValue,
                 activityLevel: userData.activityLevel.rawValue,
+                targetWeight: userData.targetWeight,
+                weightLossSpeed: userData.healthGoals.contains(.loseWeight) || userData.healthGoals.contains(.gainWeight) ? mapWeightLossSpeedToDatabase(userData.weightLossSpeed) : nil,
                 marketingSource: userData.marketingSource?.rawValue,
+                hasTriedCalorieTracking: userData.hasTriedCalorieTracking,
+                hasTriedMealPlanning: userData.hasTriedMealPlanning,
                 motivations: Array(userData.motivations.map { $0.rawValue }),
                 motivationOther: userData.motivationOther,
                 challenges: Array(userData.challenges.map { $0.rawValue }),
@@ -99,17 +117,50 @@ class LocalUserDataService: ObservableObject {
                 dietaryRestrictions: Array(userData.dietaryRestrictions.map { $0.rawValue }),
                 foodAllergies: Array(userData.foodAllergies.map { $0.rawValue }),
                 weeklyBudget: userData.weeklyBudget,
+                nutritionPlan: userData.nutritionPlan != nil ? NutritionPlanData(
+                    dailyCalories: userData.nutritionPlan!.dailyCalories,
+                    dailyCarbs: userData.nutritionPlan!.dailyCarbs,
+                    dailyProtein: userData.nutritionPlan!.dailyProtein,
+                    dailyFats: userData.nutritionPlan!.dailyFats,
+                    predictedWeightAfter3Months: userData.nutritionPlan!.predictedWeightAfter3Months,
+                    weightChange: userData.nutritionPlan!.weightChange,
+                    healthScore: userData.nutritionPlan!.healthScore,
+                    healthScoreReasoning: userData.nutritionPlan!.healthScoreReasoning,
+                    createdDate: ISO8601DateFormatter().string(from: userData.nutritionPlan!.createdDate)
+                ) : nil,
                 onboardingCompleted: true,
+                progressStartDate: userData.progressStartDate != nil ? ISO8601DateFormatter().string(from: userData.progressStartDate!) : nil,
                 updatedAt: ISO8601DateFormatter().string(from: Date())
             )
             
             // Use upsert with explicit conflict resolution on user_id column
-            try await supabase.database
+            print("💾 Attempting to save profile to Supabase...")
+            print("   - User ID: \(userId.uuidString)")
+            print("   - Name: \(dbUpdates.name ?? "No name")")
+            print("   - Onboarding Completed: \(dbUpdates.onboardingCompleted)")
+            print("   - Age: \(dbUpdates.age ?? 0)")
+            print("   - Weight: \(dbUpdates.weight ?? 0)")
+            print("   - Height: \(dbUpdates.height ?? 0)")
+            print("   - Health Goals: \(userData.healthGoals.map { $0.rawValue })")
+            print("   - Weight Loss Speed: \(dbUpdates.weightLossSpeed ?? "nil")")
+            print("   - Target Weight: \(dbUpdates.targetWeight ?? 0)")
+            
+            // Validate required fields
+            if dbUpdates.userId.isEmpty {
+                throw NSError(domain: "ValidationError", code: 400, userInfo: [NSLocalizedDescriptionKey: "User ID is empty"])
+            }
+            
+            let result = try await supabase.database
                 .from("user_profiles")
                 .upsert(dbUpdates, onConflict: "user_id")
                 .execute()
             
+            print("💾 Supabase upsert result: \(result)")
+            print("   - Status: \(result.status)")
+            print("   - Count: \(result.count ?? 0)")
+            
             print("✅ User profile successfully saved to Supabase (upsert operation)")
+            print("   - Saved with user_id: \(userId.uuidString)")
             
             // Also update local backup
             await saveToLocalBackup(userData: userData, userId: userId.uuidString)
@@ -119,6 +170,13 @@ class LocalUserDataService: ObservableObject {
                 errorMessage = "Failed to update user profile: \(error.localizedDescription)"
             }
             print("❌ Failed to update profile in Supabase: \(error)")
+            print("   - Error type: \(type(of: error))")
+            print("   - Error description: \(error.localizedDescription)")
+            if let supabaseError = error as? NSError {
+                print("   - Error domain: \(supabaseError.domain)")
+                print("   - Error code: \(supabaseError.code)")
+                print("   - User info: \(supabaseError.userInfo)")
+            }
             throw error
         }
     }
@@ -236,8 +294,14 @@ class LocalUserDataService: ObservableObject {
                 .execute()
                 .value
             
+            print("🔍 Supabase query returned \(response.count) profiles")
+            
             if let profileData = response.first {
                 print("✅ Found existing profile in Supabase")
+                print("   - Profile user_id: \(profileData.userId)")
+                print("   - Profile name: \(profileData.name ?? "No name")")
+                print("   - Profile onboarding_completed: \(profileData.onboardingCompleted)")
+                
                 let userData = try convertSupabaseToUserData(profileData)
                 
                 // Also save to local backup for faster future access
@@ -246,6 +310,8 @@ class LocalUserDataService: ObservableObject {
                 return userData
             } else {
                 print("📝 No profile found in Supabase - user needs onboarding")
+                print("   - Queried user_id: \(userId.uuidString)")
+                print("   - Response count: \(response.count)")
                 return nil
             }
             
@@ -263,6 +329,25 @@ class LocalUserDataService: ObservableObject {
     func clearAllData() {
         UserDefaults.standard.removeObject(forKey: userProfileKey)
         print("🗑️ All local user data cleared")
+    }
+    
+    private func mapWeightLossSpeedToDatabase(_ speed: WeightLossSpeed?) -> String? {
+        guard let speed = speed else { return nil }
+        
+        switch speed {
+        case .slow: return "slow"
+        case .medium: return "moderate"
+        case .fast: return "fast"
+        }
+    }
+    
+    private func mapDatabaseToWeightLossSpeed(_ dbValue: String) -> WeightLossSpeed? {
+        switch dbValue {
+        case "slow": return .slow
+        case "moderate": return .medium
+        case "fast": return .fast
+        default: return nil
+        }
     }
     
     // MARK: - Data Synchronization
@@ -406,33 +491,74 @@ class LocalUserDataService: ObservableObject {
     
     private func convertSupabaseToUserData(_ response: UserProfileSupabaseResponse) throws -> UserOnboardingData {
         var userData = UserOnboardingData()
-        
+
         userData.name = response.name
+        userData.country = response.country
         userData.age = response.age
         userData.weight = response.weight
         userData.height = response.height
         userData.likesToCook = response.likesToCook
+        userData.targetWeight = response.targetWeight
         userData.motivationOther = response.motivationOther
         userData.weeklyBudget = response.weeklyBudget
-        
+
         // Convert enum strings back to enums
+        if let sex = response.sex {
+            userData.sex = Sex(rawValue: sex)
+        }
+
         if let cookingPref = response.cookingPreference {
             userData.cookingPreference = CookingPreference(rawValue: cookingPref)
         }
-        
+
         userData.activityLevel = ActivityLevel(rawValue: response.activityLevel) ?? .sedentary
-        
+
+        if let weightLossSpeed = response.weightLossSpeed {
+            userData.weightLossSpeed = mapDatabaseToWeightLossSpeed(weightLossSpeed)
+        }
+
         if let marketingSource = response.marketingSource {
             userData.marketingSource = MarketingSource(rawValue: marketingSource)
         }
-        
+
+        // Set experience tracking fields
+        userData.hasTriedCalorieTracking = response.hasTriedCalorieTracking
+        userData.hasTriedMealPlanning = response.hasTriedMealPlanning
+
         // Convert string arrays back to Sets/Arrays
         userData.motivations = Set(response.motivations.compactMap { Motivation(rawValue: $0) })
         userData.challenges = Set(response.challenges.compactMap { Challenge(rawValue: $0) })
         userData.healthGoals = response.healthGoals.compactMap { HealthGoal(rawValue: $0) }
         userData.dietaryRestrictions = Set(response.dietaryRestrictions.compactMap { DietaryRestriction(rawValue: $0) })
         userData.foodAllergies = Set(response.foodAllergies.compactMap { Allergy(rawValue: $0) })
-        
+
+        // Convert nutrition plan from NutritionPlanData back to NutritionPlan
+        if let nutritionPlanData = response.nutritionPlan {
+            let formatter = ISO8601DateFormatter()
+            let createdDate = formatter.date(from: nutritionPlanData.createdDate) ?? Date()
+            
+            userData.nutritionPlan = NutritionPlan(
+                dailyCalories: nutritionPlanData.dailyCalories,
+                dailyCarbs: nutritionPlanData.dailyCarbs,
+                dailyProtein: nutritionPlanData.dailyProtein,
+                dailyFats: nutritionPlanData.dailyFats,
+                predictedWeightAfter3Months: nutritionPlanData.predictedWeightAfter3Months,
+                weightChange: nutritionPlanData.weightChange,
+                healthScore: nutritionPlanData.healthScore,
+                healthScoreReasoning: nutritionPlanData.healthScoreReasoning,
+                createdDate: createdDate
+            )
+        }
+
+        // Convert account creation date
+        let formatter = ISO8601DateFormatter()
+        userData.accountCreatedAt = formatter.date(from: response.createdAt)
+
+        // Convert progress start date
+        if let progressStartDate = response.progressStartDate {
+            userData.progressStartDate = formatter.date(from: progressStartDate)
+        }
+
         return userData
     }
 
@@ -505,9 +631,12 @@ extension UserOnboardingData: Codable {
     enum CodingKeys: String, CodingKey {
         case name
         case sex
+        case country
         case likesToCook
         case cookingPreference
         case marketingSource
+        case hasTriedCalorieTracking
+        case hasTriedMealPlanning
         case motivations
         case motivationOther
         case challenges
@@ -516,19 +645,24 @@ extension UserOnboardingData: Codable {
         case weight
         case height
         case activityLevel
+        case targetWeight
+        case weightLossSpeed
         case dietaryRestrictions
         case foodAllergies
         case weeklyBudget
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
+
         name = try container.decode(String.self, forKey: .name)
         sex = try container.decodeIfPresent(Sex.self, forKey: .sex)
+        country = try container.decodeIfPresent(String.self, forKey: .country)
         likesToCook = try container.decodeIfPresent(Bool.self, forKey: .likesToCook)
         cookingPreference = try container.decodeIfPresent(CookingPreference.self, forKey: .cookingPreference)
         marketingSource = try container.decodeIfPresent(MarketingSource.self, forKey: .marketingSource)
+        hasTriedCalorieTracking = try container.decodeIfPresent(Bool.self, forKey: .hasTriedCalorieTracking)
+        hasTriedMealPlanning = try container.decodeIfPresent(Bool.self, forKey: .hasTriedMealPlanning)
         motivations = Set(try container.decodeIfPresent([Motivation].self, forKey: .motivations) ?? [])
         motivationOther = try container.decodeIfPresent(String.self, forKey: .motivationOther) ?? ""
         challenges = Set(try container.decodeIfPresent([Challenge].self, forKey: .challenges) ?? [])
@@ -537,19 +671,24 @@ extension UserOnboardingData: Codable {
         weight = try container.decode(Double.self, forKey: .weight)
         height = try container.decode(Int.self, forKey: .height)
         activityLevel = try container.decode(ActivityLevel.self, forKey: .activityLevel)
+        targetWeight = try container.decodeIfPresent(Double.self, forKey: .targetWeight)
+        weightLossSpeed = try container.decodeIfPresent(WeightLossSpeed.self, forKey: .weightLossSpeed)
         dietaryRestrictions = Set(try container.decode([DietaryRestriction].self, forKey: .dietaryRestrictions))
         foodAllergies = Set(try container.decode([Allergy].self, forKey: .foodAllergies))
         weeklyBudget = try container.decodeIfPresent(Double.self, forKey: .weeklyBudget)
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        
+
         try container.encode(name, forKey: .name)
         try container.encodeIfPresent(sex, forKey: .sex)
+        try container.encodeIfPresent(country, forKey: .country)
         try container.encodeIfPresent(likesToCook, forKey: .likesToCook)
         try container.encodeIfPresent(cookingPreference, forKey: .cookingPreference)
         try container.encodeIfPresent(marketingSource, forKey: .marketingSource)
+        try container.encodeIfPresent(hasTriedCalorieTracking, forKey: .hasTriedCalorieTracking)
+        try container.encodeIfPresent(hasTriedMealPlanning, forKey: .hasTriedMealPlanning)
         try container.encode(Array(motivations), forKey: .motivations)
         try container.encode(motivationOther, forKey: .motivationOther)
         try container.encode(Array(challenges), forKey: .challenges)
@@ -558,6 +697,8 @@ extension UserOnboardingData: Codable {
         try container.encode(weight, forKey: .weight)
         try container.encode(height, forKey: .height)
         try container.encode(activityLevel, forKey: .activityLevel)
+        try container.encodeIfPresent(targetWeight, forKey: .targetWeight)
+        try container.encodeIfPresent(weightLossSpeed, forKey: .weightLossSpeed)
         try container.encode(Array(dietaryRestrictions), forKey: .dietaryRestrictions)
         try container.encode(Array(foodAllergies), forKey: .foodAllergies)
         try container.encodeIfPresent(weeklyBudget, forKey: .weeklyBudget)
@@ -571,13 +712,19 @@ struct UserProfileSupabaseResponse: Codable {
     let userId: String
     let email: String
     let name: String
+    let sex: String?
+    let country: String?
     let age: Int
     let weight: Double
     let height: Int
     let likesToCook: Bool?
     let cookingPreference: String?
     let activityLevel: String
+    let targetWeight: Double?
+    let weightLossSpeed: String?
     let marketingSource: String?
+    let hasTriedCalorieTracking: Bool?
+    let hasTriedMealPlanning: Bool?
     let motivations: [String]
     let motivationOther: String
     let challenges: [String]
@@ -585,22 +732,30 @@ struct UserProfileSupabaseResponse: Codable {
     let dietaryRestrictions: [String]
     let foodAllergies: [String]
     let weeklyBudget: Double?
+    let nutritionPlan: NutritionPlanData?
     let onboardingCompleted: Bool
+    let progressStartDate: String?
     let createdAt: String
     let updatedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
         case email
         case name
+        case sex
+        case country
         case age
         case weight
         case height
         case likesToCook = "likes_to_cook"
         case cookingPreference = "cooking_preference"
         case activityLevel = "activity_level"
+        case targetWeight = "target_weight"
+        case weightLossSpeed = "weight_loss_speed"
         case marketingSource = "marketing_source"
+        case hasTriedCalorieTracking = "has_tried_calorie_tracking"
+        case hasTriedMealPlanning = "has_tried_meal_planning"
         case motivations
         case motivationOther = "motivation_other"
         case challenges
@@ -608,7 +763,9 @@ struct UserProfileSupabaseResponse: Codable {
         case dietaryRestrictions = "dietary_restrictions"
         case foodAllergies = "food_allergies"
         case weeklyBudget = "weekly_budget"
+        case nutritionPlan = "nutrition_plan"
         case onboardingCompleted = "onboarding_completed"
+        case progressStartDate = "progress_start_date"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -619,13 +776,18 @@ struct UserProfileUpdate: Codable {
     let email: String
     let name: String
     let sex: String?
+    let country: String?
     let age: Int
     let weight: Double
     let height: Int
     let likesToCook: Bool?
     let cookingPreference: String?
     let activityLevel: String
+    let targetWeight: Double?
+    let weightLossSpeed: String?
     let marketingSource: String?
+    let hasTriedCalorieTracking: Bool?
+    let hasTriedMealPlanning: Bool?
     let motivations: [String]
     let motivationOther: String
     let challenges: [String]
@@ -633,21 +795,28 @@ struct UserProfileUpdate: Codable {
     let dietaryRestrictions: [String]
     let foodAllergies: [String]
     let weeklyBudget: Double?
+    let nutritionPlan: NutritionPlanData?
     let onboardingCompleted: Bool
+    let progressStartDate: String?
     let updatedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case email
         case name
         case sex
+        case country
         case age
         case weight
         case height
         case likesToCook = "likes_to_cook"
         case cookingPreference = "cooking_preference"
         case activityLevel = "activity_level"
+        case targetWeight = "target_weight"
+        case weightLossSpeed = "weight_loss_speed"
         case marketingSource = "marketing_source"
+        case hasTriedCalorieTracking = "has_tried_calorie_tracking"
+        case hasTriedMealPlanning = "has_tried_meal_planning"
         case motivations
         case motivationOther = "motivation_other"
         case challenges
@@ -655,7 +824,9 @@ struct UserProfileUpdate: Codable {
         case dietaryRestrictions = "dietary_restrictions"
         case foodAllergies = "food_allergies"
         case weeklyBudget = "weekly_budget"
+        case nutritionPlan = "nutrition_plan"
         case onboardingCompleted = "onboarding_completed"
+        case progressStartDate = "progress_start_date"
         case updatedAt = "updated_at"
     }
 }

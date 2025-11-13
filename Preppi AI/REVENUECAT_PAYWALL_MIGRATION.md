@@ -1,7 +1,7 @@
 # RevenueCat Paywall Migration
 
 ## Overview
-Successfully migrated from Superwall + RevenueCat hybrid setup to a pure RevenueCat paywall implementation.
+Successfully reverted from Superwall integration back to pure RevenueCat paywall implementation.
 
 ## Changes Made
 

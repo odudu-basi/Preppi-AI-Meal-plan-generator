@@ -16,7 +16,7 @@ struct DietaryRestrictionsView: View {
             VStack(spacing: 0) {
                 // Progress indicator - Fixed at top
                 OnboardingNavigationBar(
-                    currentStep: 8,
+                    currentStep: coordinator.currentStep.stepNumber,
                     totalSteps: OnboardingStep.totalSteps,
                     canGoBack: true,
                     onBackTapped: {
@@ -74,7 +74,7 @@ struct DietaryRestrictionsView: View {
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
-                                    .lineLimit(3)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .padding(.horizontal, 20)
                                     .opacity(animateHeader ? 1.0 : 0.0)
                                     .offset(y: animateHeader ? 0 : 20)

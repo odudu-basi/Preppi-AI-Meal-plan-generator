@@ -1,5 +1,5 @@
 import SwiftUI
-import Combine
+       import Combine
 import Foundation
 import RevenueCat
 import Supabase
@@ -20,6 +20,15 @@ final class AppState: ObservableObject {
     @Published var showGetStarted: Bool = false
     @Published var selectedMealTypes: [String] = ["dinner"]
     @Published var currentMealTypeBeingCreated: String = "dinner" // Track which meal type is being created
+    @Published var sharedImage: UIImage? = nil // For handling shared images from extensions
+    @Published var shouldNavigateToPhotoProcessing: Bool = false // Flag to navigate to photo processing
+    @Published var hasCompletedMealLoggingInfo: Bool = false // Track if user completed meal logging info flow
+    @Published var prefersMealPlanAssistance: Bool = false // Track if user chose "Yes" for meal plan assistance
+    @Published var weeklyMealPlanPreferences: [String: Bool] = [:] // Track meal plan preference by week (week key -> preference)
+
+    // NEW: Guest onboarding flow state
+    @Published var isGuestOnboarding: Bool = false // True when user starts onboarding without auth
+    @Published var needsSignUpAfterOnboarding: Bool = false // True after completing guest onboarding
     
     // MARK: - Services
     private let databaseService = LocalUserDataService.shared
@@ -34,6 +43,7 @@ final class AppState: ObservableObject {
         setupAuthObserver()
         loadUserProfile()
         checkProAccess()
+        loadWeeklyPreferences()
     }
     
     // MARK: - Setup Observers
@@ -87,6 +97,7 @@ final class AppState: ObservableObject {
                     self.userData = profileData.userData
                     self.isOnboardingComplete = profileData.onboardingCompleted
                     
+                    // Check if user needs to see paywall after onboarding
                     if profileData.onboardingCompleted && !self.hasProAccess {
                         self.showPostOnboardingPaywall = true
                     }
@@ -104,16 +115,49 @@ final class AppState: ObservableObject {
     }
     
     func completeOnboarding(with data: UserOnboardingData) async {
+        // Check if this is being called during guest onboarding (before signup)
+        if needsSignUpAfterOnboarding {
+            print("🎯 Guest onboarding completion - NOT saving to Supabase yet")
+            print("   - Will save after user signs up")
+            // Set the onboarding completion date for guest users too
+            var updatedData = data
+            updatedData.onboardingCompletedAt = Date()
+            self.userData = updatedData
+            // Don't set isOnboardingComplete = true yet, wait for signup
+            return
+        }
+        
         do {
             print("💾 Saving user profile to Supabase...")
+            print("   - User Name: \(data.name)")
+            print("   - Marketing Source: \(data.marketingSource?.rawValue ?? "None")")
+            print("   - Cooking Preference: \(data.cookingPreference?.rawValue ?? "None")")
+            print("   - Health Goals: \(data.healthGoals.map { $0.rawValue })")
+            print("   - Weekly Budget: $\(data.weeklyBudget ?? 0)")
+            
+            // CRITICAL: Set the onboarding completion date before saving
+            var updatedData = data
+            updatedData.onboardingCompletedAt = Date()
+            print("   - Onboarding Completed At: \(updatedData.onboardingCompletedAt!)")
+            
             // Use updateUserProfile instead of createUserProfile to save to Supabase
-            try await databaseService.updateUserProfile(data)
-            self.userData = data
+            try await databaseService.updateUserProfile(updatedData)
+            self.userData = updatedData
             self.isOnboardingComplete = true
             print("✅ Profile saved successfully to Supabase")
+            print("   - AppState userData updated with name: \(self.userData.name)")
+            print("   - AppState isOnboardingComplete: \(self.isOnboardingComplete)")
+            print("   - Onboarding completion date set: \(self.userData.onboardingCompletedAt!)")
         } catch {
             self.errorMessage = "Failed to save data: \(error.localizedDescription)"
             print("❌ Failed to save profile: \(error)")
+            print("   - Error details: \(error)")
+            print("   - Error type: \(type(of: error))")
+            if let nsError = error as? NSError {
+                print("   - Error domain: \(nsError.domain)")
+                print("   - Error code: \(nsError.code)")
+                print("   - User info: \(nsError.userInfo)")
+            }
         }
     }
     
@@ -133,6 +177,7 @@ final class AppState: ObservableObject {
         hasProAccess = false
         showPostOnboardingPaywall = false
         showGetStarted = false
+        hasCompletedMealLoggingInfo = false
         
         // Reset Get Started status so user sees it again for new account
         UserDefaults.standard.removeObject(forKey: "hasSeenGetStarted")
@@ -176,10 +221,19 @@ final class AppState: ObservableObject {
             do {
                 // Add timeout to prevent infinite loading
                 try await withTimeout(seconds: 30) {
-                    // First, load user profile with improved sync
-                    print("📥 Loading user profile...")
-                    await self.loadUserProfileWithSync()
-                    print("✅ Profile load complete")
+                    // Check if we're in a post-onboarding flow (signup or signin)
+                    if self.needsSignUpAfterOnboarding {
+                        print("🎯 Post-onboarding flow detected - skipping profile load to preserve onboarding data")
+                        print("   - Current userData name: \(self.userData.name)")
+                        print("   - Current isOnboardingComplete: \(self.isOnboardingComplete)")
+                        // Don't load profile from database as it would overwrite the onboarding data
+                        // The PostOnboardingSignUpView or SignInOnlyView will handle saving the data
+                    } else {
+                        // Normal sign-in flow - load user profile with improved sync
+                        print("📥 Loading user profile...")
+                        await self.loadUserProfileWithSync()
+                        print("✅ Profile load complete")
+                    }
                     
                     // Always check entitlements after sign in to ensure fresh data
                     print("🎟️ Force refreshing entitlements...")
@@ -307,18 +361,21 @@ final class AppState: ObservableObject {
         print("✅ Purchase completed")
     }
     
+    
     // MARK: - Computed Properties
-    // Check if user can access main app (authenticated AND completed onboarding AND has Pro access)
+    // Check if user can access main app (authenticated AND (completed onboarding OR has Pro access))
     var canAccessMainApp: Bool {
-        isAuthenticated && isOnboardingComplete && hasProAccess
+        isAuthenticated && (isOnboardingComplete || hasProAccess) && !isCheckingEntitlements
     }
     
     var shouldShowOnboarding: Bool {
-        isAuthenticated && !isOnboardingComplete && !isCheckingEntitlements
+        // Show onboarding only if user is authenticated, hasn't completed onboarding, 
+        // doesn't have Pro access, and isn't checking entitlements
+        isAuthenticated && !isOnboardingComplete && !hasProAccess && !isCheckingEntitlements
     }
     
     var shouldShowPaywall: Bool {
-        // Show paywall if user is authenticated, completed onboarding, but doesn't have Pro access
+        // Show RevenueCat paywall if user is authenticated, completed onboarding, but doesn't have Pro access
         // and not currently checking entitlements
         return isAuthenticated && isOnboardingComplete && !hasProAccess && !isCheckingEntitlements
     }
@@ -339,10 +396,111 @@ final class AppState: ObservableObject {
     private var hasSeenGetStarted: Bool {
         UserDefaults.standard.bool(forKey: "hasSeenGetStarted")
     }
-    
+
     func markGetStartedAsSeen() {
         UserDefaults.standard.set(true, forKey: "hasSeenGetStarted")
         showGetStarted = true
+    }
+
+    // MARK: - Guest Onboarding Flow
+    func startGuestOnboarding() {
+        print("🎯 Starting guest onboarding flow")
+        isGuestOnboarding = true
+        isOnboardingComplete = false
+        needsSignUpAfterOnboarding = false
+    }
+
+    func completeGuestOnboarding() {
+        print("✅ Guest onboarding completed - need signup")
+        print("   - User Name: \(userData.name)")
+        print("   - Marketing Source: \(userData.marketingSource?.rawValue ?? "None")")
+        print("   - Cooking Preference: \(userData.cookingPreference?.rawValue ?? "None")")
+        print("   - Health Goals: \(userData.healthGoals.map { $0.rawValue })")
+        print("   - Weekly Budget: $\(userData.weeklyBudget ?? 0)")
+        isGuestOnboarding = false
+        needsSignUpAfterOnboarding = true
+        // Don't set isOnboardingComplete yet - wait until after signup
+    }
+    
+    // MARK: - Shared Image Handling
+    func handleSharedImage(_ image: UIImage) {
+        print("📸 Received shared image from extension")
+        self.sharedImage = image
+        self.shouldNavigateToPhotoProcessing = true
+    }
+    
+    func clearSharedImage() {
+        self.sharedImage = nil
+        self.shouldNavigateToPhotoProcessing = false
+    }
+    
+    // MARK: - Meal Logging Info Flow
+    func completeMealLoggingInfo() {
+        print("✅ User completed meal logging info flow")
+        self.hasCompletedMealLoggingInfo = true
+        self.prefersMealPlanAssistance = false // User chose "No" for meal plan assistance
+        
+        // Store weekly preference
+        let weekKey = getWeekKey(for: Date())
+        weeklyMealPlanPreferences[weekKey] = false
+        saveWeeklyPreferences()
+    }
+    
+    func openDeviceCamera() {
+        print("📸 Opening device camera for meal logging")
+        NotificationCenter.default.post(name: NSNotification.Name("OpenDeviceCamera"), object: nil)
+    }
+    
+    // MARK: - Weekly Meal Plan Preferences
+    func setWeeklyMealPlanPreference(_ preference: Bool, for date: Date = Date()) {
+        let weekKey = getWeekKey(for: date)
+        weeklyMealPlanPreferences[weekKey] = preference
+        prefersMealPlanAssistance = preference
+        hasCompletedMealLoggingInfo = true
+        saveWeeklyPreferences()
+        print("✅ Set weekly meal plan preference: \(preference) for week: \(weekKey)")
+    }
+    
+    func getWeeklyMealPlanPreference(for date: Date = Date()) -> Bool? {
+        let weekKey = getWeekKey(for: date)
+        return weeklyMealPlanPreferences[weekKey]
+    }
+    
+    func hasWeeklyMealPlanPreference(for date: Date = Date()) -> Bool {
+        let weekKey = getWeekKey(for: date)
+        return weeklyMealPlanPreferences[weekKey] != nil
+    }
+    
+    private func getWeekKey(for date: Date) -> String {
+        let calendar = Calendar.current
+        let weekOfYear = calendar.component(.weekOfYear, from: date)
+        let year = calendar.component(.year, from: date)
+        return "\(year)-W\(weekOfYear)"
+    }
+    
+    private func saveWeeklyPreferences() {
+        if let encoded = try? JSONEncoder().encode(weeklyMealPlanPreferences) {
+            UserDefaults.standard.set(encoded, forKey: "weeklyMealPlanPreferences")
+        }
+    }
+    
+    private func loadWeeklyPreferences() {
+        if let data = UserDefaults.standard.data(forKey: "weeklyMealPlanPreferences"),
+           let decoded = try? JSONDecoder().decode([String: Bool].self, from: data) {
+            weeklyMealPlanPreferences = decoded
+            updateCurrentPreferences()
+        }
+    }
+    
+    func updateCurrentPreferences(for date: Date = Date()) {
+        if let weeklyPreference = getWeeklyMealPlanPreference(for: date) {
+            prefersMealPlanAssistance = weeklyPreference
+            hasCompletedMealLoggingInfo = true
+        } else {
+            // Reset for new week
+            prefersMealPlanAssistance = false
+            hasCompletedMealLoggingInfo = false
+        }
     }
     
     // MARK: - Debug Methods
@@ -359,7 +517,13 @@ final class AppState: ObservableObject {
         print("Show Onboarding: \(shouldShowOnboarding)")
         print("Show Paywall: \(shouldShowPaywall)")
         print("Access Main App: \(canAccessMainApp)")
-        print("User Name: \(userData.name)\n")
+        print("User Name: \(userData.name)")
+        
+        // Special case logging
+        if isAuthenticated && !isOnboardingComplete && hasProAccess {
+            print("🎯 SPECIAL CASE: Paid user without profile data - bypassing onboarding")
+        }
+        print("")
     }
     
     // MARK: - Helper Functions

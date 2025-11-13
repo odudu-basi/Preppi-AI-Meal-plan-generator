@@ -82,9 +82,19 @@ struct OnboardingNavigationBar: View {
             }
             
             // Progress bar
-            ProgressView(value: progressValue)
-                .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                .scaleEffect(x: 1, y: 2, anchor: .center)
+            // Custom progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 4)
+                    
+                    Rectangle()
+                        .fill(Color.green)
+                        .frame(width: geometry.size.width * progressValue, height: 4)
+                }
+            }
+            .frame(height: 4)
         }
         .padding(.horizontal)
     }
@@ -109,9 +119,19 @@ struct OnboardingProgressView: View {
                 Spacer()
             }
             
-            ProgressView(value: progressValue)
-                .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                .scaleEffect(x: 1, y: 2, anchor: .center)
+            // Custom progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 4)
+                    
+                    Rectangle()
+                        .fill(Color.green)
+                        .frame(width: geometry.size.width * progressValue, height: 4)
+                }
+            }
+            .frame(height: 4)
         }
         .padding(.horizontal)
     }
@@ -119,36 +139,58 @@ struct OnboardingProgressView: View {
 
 // MARK: - Onboarding Step Enum
 enum OnboardingStep: Int, CaseIterable {
-    case name = 0
-    case sex = 1
-    case cookingPreference = 2
-    case marketing = 3
-    case motivation = 4
-    case challenge = 5
-    case healthGoals = 6
-    case physicalStats = 7
-    case dietaryRestrictions = 8
-    case budget = 9
-    
+    case welcome = 0
+    case name = 1
+    case sex = 2
+    case country = 3
+    case cookingPreference = 4
+    case marketing = 5
+    case calorieTrackingExperience = 6
+    case mealPlanningExperience = 7
+    case motivation = 8
+    case challenge = 9
+    case healthGoals = 10
+    case goalConfirmation = 11
+    case physicalStats = 12
+    case targetWeight = 13
+    case weightLossSpeed = 14
+    case threeMonthCommitment = 15
+    case thankYou = 16
+    case dietaryRestrictions = 17
+    case nutritionPlanLoading = 18
+    case nutritionPlanDisplay = 19
+    case budget = 20
+
     var title: String {
         switch self {
+        case .welcome: return "Welcome to Preppi AI"
         case .name: return "What's your name?"
         case .sex: return "What's your sex?"
+        case .country: return "What country are you from?"
         case .cookingPreference: return "Do you like to cook?"
         case .marketing: return "How did you hear about us?"
+        case .calorieTrackingExperience: return "Calorie tracking experience"
+        case .mealPlanningExperience: return "Meal planning experience"
         case .motivation: return "What's your main reason for trying PREPPI AI?"
         case .challenge: return "What's your biggest challenge with meal planning right now?"
         case .healthGoals: return "What are your health goals?"
+        case .goalConfirmation: return "How Preppi Helps You"
         case .physicalStats: return "Tell us about yourself"
+        case .targetWeight: return "What's your target weight?"
+        case .weightLossSpeed: return "How fast do you want to reach your goal?"
+        case .threeMonthCommitment: return "The Preppi Approach"
+        case .thankYou: return "Thank You"
         case .dietaryRestrictions: return "Any dietary restrictions?"
         case .budget: return "Weekly grocery budget"
+        case .nutritionPlanLoading: return "Customizing Your Plan"
+        case .nutritionPlanDisplay: return "Your Custom Plan"
         }
     }
-    
+
     var stepNumber: Int {
         return self.rawValue + 1
     }
-    
+
     static var totalSteps: Int {
         return OnboardingStep.allCases.count
     }

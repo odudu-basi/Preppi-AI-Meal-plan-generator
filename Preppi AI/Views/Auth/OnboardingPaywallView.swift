@@ -1,10 +1,9 @@
 import SwiftUI
 import RevenueCat
-import SuperwallKit
+import RevenueCatUI
 
 struct OnboardingPaywallView: View {
     @StateObject private var revenueCatService = RevenueCatService.shared
-    @StateObject private var superwallService = SuperwallService.shared
     @Binding var isPurchaseCompleted: Bool
     
     var body: some View {
@@ -19,32 +18,41 @@ struct OnboardingPaywallView: View {
                         .foregroundColor(.secondary)
                         .padding(.top)
                 }
-            } else {
-                // Show Superwall paywall
-                VStack {
-                    Color.clear
-                        .onAppear {
-                            presentOnboardingPaywall()
-                        }
-                    
-                    // Fallback UI
-                    VStack(spacing: 20) {
-                        Text("Unlock Premium Features")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        Text("Get access to unlimited meal plans and AI-powered recipes.")
-                            .font(.body)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                        
-                        Button("Continue") {
-                            presentOnboardingPaywall()
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .padding()
+            } else if let offering = revenueCatService.currentOffering {
+                // Show RevenueCat paywall
+                PaywallView(offering: offering) { customerInfo in
+                    // Handle successful purchase
+                    print("✅ Purchase successful in onboarding paywall")
+                    isPurchaseCompleted = true
+                    return (userCancelled: false, error: nil)
                 }
+                .onRestoreCompleted { customerInfo in
+                    // Handle successful restore
+                    print("✅ Restore successful in onboarding paywall")
+                    if customerInfo.entitlements.active.isEmpty == false {
+                        isPurchaseCompleted = true
+                    }
+                }
+            } else {
+                // Fallback UI when no offering is available
+                VStack(spacing: 20) {
+                    Text("Unlock Premium Features")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("Get access to unlimited meal plans and AI-powered recipes.")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                    
+                    Button("Retry Loading") {
+                        Task {
+                            await revenueCatService.fetchOfferings()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
             }
             
             if let error = revenueCatService.error {
@@ -92,18 +100,6 @@ struct OnboardingPaywallView: View {
                 isPurchaseCompleted = true
             }
         }
-    }
-    
-    private func presentOnboardingPaywall() {
-        print("🎯 Presenting Superwall onboarding paywall...")
-        
-        SuperwallService.shared.presentPaywall(
-            for: "campaign_trigger",
-            parameters: [
-                "source": "onboarding",
-                "user_type": "new"
-            ]
-        )
     }
 }
 

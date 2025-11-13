@@ -19,10 +19,12 @@ struct NameInputView: View {
             VStack(spacing: 20) {
                 // Navigation bar with progress
                 OnboardingNavigationBar(
-                    currentStep: 1,
+                    currentStep: coordinator.currentStep.stepNumber,
                     totalSteps: OnboardingStep.totalSteps,
-                    canGoBack: false, // First step, no back button
-                    onBackTapped: {}
+                    canGoBack: true,
+                    onBackTapped: {
+                        coordinator.previousStep()
+                    }
                 )
                 
                 // Premium Header Section

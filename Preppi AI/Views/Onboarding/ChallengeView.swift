@@ -20,7 +20,7 @@ struct ChallengeView: View {
                 VStack(spacing: 20) {
                     // Progress indicator
                     OnboardingNavigationBar(
-                        currentStep: 5,
+                        currentStep: coordinator.currentStep.stepNumber,
                         totalSteps: OnboardingStep.totalSteps,
                         canGoBack: true,
                         onBackTapped: {
@@ -67,7 +67,7 @@ struct ChallengeView: View {
                                     )
                                 )
                                 .multilineTextAlignment(.center)
-                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .padding(.horizontal, 20)
                                 .opacity(animateHeader ? 1.0 : 0.0)
                                 .offset(y: animateHeader ? 0 : 20)

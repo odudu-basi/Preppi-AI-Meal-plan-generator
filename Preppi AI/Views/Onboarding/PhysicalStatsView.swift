@@ -36,7 +36,7 @@ struct PhysicalStatsView: View {
             VStack(spacing: 0) {
                 // Progress indicator - Fixed at top
                 OnboardingNavigationBar(
-                    currentStep: 7,
+                    currentStep: coordinator.currentStep.stepNumber,
                     totalSteps: OnboardingStep.totalSteps,
                     canGoBack: true,
                     onBackTapped: {

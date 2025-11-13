@@ -137,6 +137,55 @@ struct ProfileView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .font(.body)
                 }
+                
+                // Sex Selection
+                if Sex.allCases.count > 1 {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Sex")
+                            .font(.headline)
+                        
+                        ForEach(Sex.allCases) { sex in
+                            HStack {
+                                Text(sex.emoji)
+                                    .font(.title3)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(sex.rawValue)
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: tempUserData.sex == sex ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(tempUserData.sex == sex ? .blue : .gray)
+                                    .font(.title3)
+                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                tempUserData.sex = sex
+                            }
+                            
+                            if sex != Sex.allCases.last {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+                
+                // Country Field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Country")
+                        .font(.headline)
+                    
+                    TextField("Enter your country", text: Binding(
+                        get: { tempUserData.country ?? "" },
+                        set: { tempUserData.country = $0.isEmpty ? nil : $0 }
+                    ))
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .font(.body)
+                }
             }
         }
     }
@@ -183,8 +232,8 @@ struct ProfileView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                // Only show the 4 health goals from onboarding
-                let onboardingHealthGoals: [HealthGoal] = [.loseWeight, .maintainWeight, .gainWeight, .improveHealth]
+                // Only show selected health goals (exclude 'Improve Overall Health')
+                let onboardingHealthGoals: [HealthGoal] = [.loseWeight, .maintainWeight, .gainWeight]
                 ForEach(onboardingHealthGoals) { goal in
                     let isSelected = tempUserData.healthGoals.contains(goal)
                     
@@ -289,6 +338,61 @@ struct ProfileView: View {
                         
                         if level != ActivityLevel.allCases.last {
                             Divider()
+                        }
+                    }
+                }
+                
+                // Target Weight (if user has weight-related goals)
+                if tempUserData.healthGoals.contains(.loseWeight) || tempUserData.healthGoals.contains(.gainWeight) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Target Weight (lbs)")
+                            .font(.headline)
+                        
+                        TextField("Target Weight", value: Binding(
+                            get: { tempUserData.targetWeight ?? 0.0 },
+                            set: { tempUserData.targetWeight = $0 == 0.0 ? nil : $0 }
+                        ), format: .number)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .keyboardType(.decimalPad)
+                    }
+                    
+                    // Weight Loss/Gain Speed
+                    if tempUserData.healthGoals.contains(.loseWeight) || tempUserData.healthGoals.contains(.gainWeight) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(tempUserData.healthGoals.contains(.loseWeight) ? "Weight Loss Speed" : "Weight Gain Speed")
+                                .font(.headline)
+                            
+                            ForEach(WeightLossSpeed.allCases) { speed in
+                                HStack {
+                                    Text(speed.emoji)
+                                        .font(.title3)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(speed.rawValue)
+                                            .font(.body)
+                                            .fontWeight(.medium)
+                                        
+                                        Text(speed.description)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: tempUserData.weightLossSpeed == speed ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(tempUserData.weightLossSpeed == speed ? .blue : .gray)
+                                        .font(.title3)
+                                }
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    tempUserData.weightLossSpeed = speed
+                                }
+                                
+                                if speed != WeightLossSpeed.allCases.last {
+                                    Divider()
+                                }
+                            }
                         }
                     }
                 }
@@ -518,25 +622,40 @@ struct ProfileView: View {
     }
     
     private func saveChanges() {
-        isSaving = true
+        // Capture current app state data to avoid accessing @EnvironmentObject later
+        let currentUserData = appState.userData
+        let userDataToSave = tempUserData
         
+        // Check if goals or pace changed
+        let goalsChanged = currentUserData.healthGoals != tempUserData.healthGoals
+        let paceChanged = currentUserData.weightLossSpeed != tempUserData.weightLossSpeed
+        let needsNutritionPlanUpdate = goalsChanged || paceChanged
+        
+        // Pre-calculate nutrition plan if needed (synchronously)
+        var finalUserData = userDataToSave
+        if needsNutritionPlanUpdate {
+            print("🔄 Goals or pace changed, updating nutrition plan...")
+            let updatedNutritionPlan = CalorieCalculationService.shared.updateNutritionPlan(for: userDataToSave)
+            finalUserData.nutritionPlan = updatedNutritionPlan
+            print("✅ Nutrition plan updated: \(updatedNutritionPlan.dailyCalories) calories")
+        }
+        
+        // Update the app state immediately with all changes
+        appState.userData = finalUserData
+        hasUnsavedChanges = false
+        
+        // Dismiss the view immediately
+        dismiss()
+        
+        // Save to database in background (no more appState access)
         Task {
             do {
                 print("💾 Saving profile changes to Supabase...")
-                await appState.updateProfile(with: tempUserData)
-                await MainActor.run {
-                    hasUnsavedChanges = false
-                    isSaving = false
-                    print("✅ Profile changes saved successfully!")
-                    dismiss()
-                }
+                let databaseService = LocalUserDataService.shared
+                try await databaseService.updateUserProfile(finalUserData)
+                print("✅ Profile changes saved successfully!")
             } catch {
-                await MainActor.run {
-                    isSaving = false
-                    print("❌ Failed to save profile changes: \(error)")
-                    // You could add an alert here to show the error to the user
-                    appState.errorMessage = "Failed to save changes: \(error.localizedDescription)"
-                }
+                print("❌ Failed to save profile changes: \(error)")
             }
         }
     }

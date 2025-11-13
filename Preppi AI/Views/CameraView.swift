@@ -24,25 +24,29 @@ struct CameraView: View {
                 )
                 .ignoresSafeArea()
                 
-                VStack(spacing: 40) {
+                VStack(spacing: 24) {
                     // Header Section
                     VStack(spacing: 20) {
-                        Text("Get your recipes")
-                            .font(.title)
-                            .fontWeight(.bold)
+                        // Main headline
+                        Text("Snap a picture, get the recipe")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .padding(.horizontal, 20)
                         
+                        // Hero image
                         Image("food_background")
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 320, height: 260)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                            .frame(width: 340, height: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 5)
                     
                     // Main Action Buttons
-                    VStack(spacing: 24) {
+                    VStack(spacing: 16) {
                         // Camera Button
                         Button {
                             MixpanelService.shared.track(event: MixpanelService.Events.takePhotoButtonTapped)
@@ -50,15 +54,14 @@ struct CameraView: View {
                         } label: {
                             HStack(spacing: 16) {
                                 Image(systemName: "camera.fill")
-                                    .font(.system(size: 24, weight: .semibold))
+                                    .font(.system(size: 22, weight: .semibold))
                                 
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text("Take Photo")
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
+                                        .font(.system(size: 18, weight: .semibold))
                                     
                                     Text("Add any context you think is necessary")
-                                        .font(.subheadline)
+                                        .font(.system(size: 14))
                                         .opacity(0.8)
                                 }
                                 
@@ -69,7 +72,8 @@ struct CameraView: View {
                                     .opacity(0.6)
                             }
                             .foregroundColor(.white)
-                            .padding(24)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 18)
                             .frame(maxWidth: .infinity)
                             .background(
                                 LinearGradient(
@@ -78,14 +82,14 @@ struct CameraView: View {
                                     endPoint: .trailing
                                 )
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
-                            .shadow(color: .green.opacity(0.3), radius: 12, x: 0, y: 6)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: .green.opacity(0.3), radius: 10, x: 0, y: 5)
                         }
                         .buttonStyle(PlainButtonStyle())
                         .scaleEffect(1.0)
                         .animation(.spring(response: 0.3), value: false)
                     }
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, 28)
                     
                     Spacer()
                     
@@ -96,26 +100,25 @@ struct CameraView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "book")
-                                .font(.system(size: 20, weight: .medium))
+                                .font(.system(size: 18, weight: .medium))
                             
                             Text("View Cookbooks")
-                                .font(.body)
-                                .fontWeight(.medium)
+                                .font(.system(size: 16, weight: .medium))
                         }
                         .foregroundColor(.blue)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
                         .background(
-                            RoundedRectangle(cornerRadius: 25)
+                            RoundedRectangle(cornerRadius: 24)
                                 .fill(Color.blue.opacity(0.1))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 25)
+                                    RoundedRectangle(cornerRadius: 24)
                                         .stroke(Color.blue.opacity(0.3), lineWidth: 1)
                                 )
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 25)
                 }
             }
             .navigationTitle("Preppi AI")
@@ -216,6 +219,23 @@ struct CameraView: View {
         }
         .fullScreenCover(isPresented: $showingCookbooks) {
             CookbooksListView()
+        }
+        .onChange(of: appState.shouldNavigateToPhotoProcessing) { _, shouldNavigate in
+            if shouldNavigate, let sharedImage = appState.sharedImage {
+                print("📸 CameraView: Handling shared image from extension")
+                selectedImage = sharedImage
+                showingPhotoProcessing = true
+                // Clear the shared image state
+                appState.clearSharedImage()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TriggerSharedImageCheck"))) { _ in
+            print("📸 CameraView: Received trigger to check for shared images")
+            // Manually trigger the app's shared image check
+            if let app = UIApplication.shared.delegate as? UIApplicationDelegate {
+                // This will trigger the checkForSharedImage method
+                NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+            }
         }
     }
 }

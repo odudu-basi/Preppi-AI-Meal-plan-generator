@@ -8,13 +8,15 @@
 import SwiftUI
 
 struct SplashScreenView: View {
-    @State private var logoScale: CGFloat = 0.5
-    @State private var logoOpacity: Double = 0.0
+    @ObservedObject private var speechService = ElevenLabsSpeechService.shared
+    @State private var mascotScale: CGFloat = 0.7
+    @State private var mascotOpacity: Double = 0.0
     @State private var backgroundOpacity: Double = 0.0
-    @State private var showPulse: Bool = false
-    
+    @State private var textOpacity: Double = 0.0
+    @State private var hasSpoken: Bool = false
+
     let onComplete: () -> Void
-    
+
     var body: some View {
         ZStack {
             // Background gradient
@@ -29,36 +31,22 @@ struct SplashScreenView: View {
             )
             .ignoresSafeArea()
             .opacity(backgroundOpacity)
-            
-            VStack(spacing: 30) {
+
+            VStack(spacing: 40) {
                 Spacer()
-                
-                // Logo with animated effects
-                ZStack {
-                    // Pulse effect background
-                    if showPulse {
-                        Circle()
-                            .fill(Color.green.opacity(0.2))
-                            .frame(width: 200, height: 200)
-                            .scaleEffect(showPulse ? 1.2 : 0.8)
-                            .opacity(showPulse ? 0.0 : 1.0)
-                            .animation(
-                                .easeInOut(duration: 1.5)
-                                .repeatForever(autoreverses: false),
-                                value: showPulse
-                            )
-                    }
-                    
-                    // Main logo
-                    PreppiLogo()
-                        .scaleEffect(logoScale)
-                        .opacity(logoOpacity)
-                }
-                
-                // App title with animated text
-                VStack(spacing: 8) {
-                    Text("PREPPI AI")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+
+                // Animated Mascot - waving and talking
+                AnimatedMascot(
+                    animation: speechService.isSpeaking ? .talking : .waving,
+                    size: 350
+                )
+                .scaleEffect(mascotScale)
+                .opacity(mascotOpacity)
+
+                // Welcome text
+                VStack(spacing: 12) {
+                    Text("Welcome!")
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [.green, .primary],
@@ -66,65 +54,72 @@ struct SplashScreenView: View {
                                 endPoint: .trailing
                             )
                         )
-                        .opacity(logoOpacity)
-                    
-                    Text("Your AI-powered meal companion")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .opacity(logoOpacity * 0.8)
+                        .opacity(textOpacity)
+
+                    Text("Hi, I'm Preppi")
+                        .font(.system(size: 26, weight: .medium, design: .rounded))
+                        .foregroundColor(.primary)
+                        .opacity(textOpacity)
                 }
-                
+
                 Spacer()
-                
-                // Loading indicator
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .green))
-                        .scaleEffect(1.2)
-                        .opacity(logoOpacity)
-                    
-                    Text("Loading your meal plans...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .opacity(logoOpacity * 0.7)
-                }
-                .padding(.bottom, 60)
             }
             .padding()
         }
         .onAppear {
             startAnimation()
+            playWelcomeMessage()
         }
     }
-    
+
     private func startAnimation() {
+        print("🎬 SplashScreen: Starting animation")
+
         // Initial background fade
         withAnimation(.easeOut(duration: 0.5)) {
             backgroundOpacity = 1.0
         }
-        
-        // Logo scale and fade in
-        withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
-            logoScale = 1.0
-            logoOpacity = 1.0
+
+        // Start mascot animation
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.3)) {
+            mascotScale = 1.0
+            mascotOpacity = 1.0
         }
-        
-        // Start pulse effect
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            showPulse = true
+
+        // Show text
+        withAnimation(.easeOut(duration: 0.6).delay(1.0)) {
+            textOpacity = 1.0
         }
-        
-        // Complete splash screen after animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+
+        // Complete splash screen after animation and audio (wave animation is about 2 seconds)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) {
+            print("🎬 SplashScreen: Fading out")
             withAnimation(.easeOut(duration: 0.5)) {
-                logoOpacity = 0.0
+                mascotOpacity = 0.0
+                textOpacity = 0.0
                 backgroundOpacity = 0.0
             }
-            
+
             // Call completion handler after fade out
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("✅ SplashScreen: Completed")
+                speechService.stop()
                 onComplete()
             }
+        }
+    }
+
+    private func playWelcomeMessage() {
+        // Voice disabled for now
+        // Play the speech after mascot appears and text is visible
+        if !hasSpoken {
+            print("🔊 SplashScreen: Voice disabled - skipping welcome message")
+            // DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            //     print("🎯 SplashScreen: Playing welcome message")
+            //     speechService.speak("Welcome! Hi, I'm Preppi")
+            //     hasSpoken = true
+            // }
+            hasSpoken = true
         }
     }
 }

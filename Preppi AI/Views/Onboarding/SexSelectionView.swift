@@ -18,7 +18,7 @@ struct SexSelectionView: View {
             VStack(spacing: 20) {
                 // Navigation bar with progress
                 OnboardingNavigationBar(
-                    currentStep: 2,
+                    currentStep: coordinator.currentStep.stepNumber,
                     totalSteps: OnboardingStep.totalSteps,
                     canGoBack: true,
                     onBackTapped: {
@@ -59,7 +59,7 @@ struct SexSelectionView: View {
                                 )
                             )
                             .multilineTextAlignment(.center)
-                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 20)
                             .opacity(animateHeader ? 1.0 : 0.0)
                             .offset(y: animateHeader ? 0 : 20)
@@ -68,7 +68,7 @@ struct SexSelectionView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 20)
                             .opacity(animateHeader ? 1.0 : 0.0)
                             .offset(y: animateHeader ? 0 : 20)

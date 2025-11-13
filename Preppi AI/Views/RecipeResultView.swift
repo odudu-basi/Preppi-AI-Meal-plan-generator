@@ -461,25 +461,19 @@ struct DifficultyRatingCard: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Difficulty Stars
-            HStack(spacing: 4) {
-                ForEach(1...10, id: \.self) { index in
-                    Image(systemName: index <= difficulty ? "star.fill" : "star")
-                        .font(.system(size: 14))
-                        .foregroundColor(index <= difficulty ? difficultyColor : .gray.opacity(0.3))
-                }
-            }
-            
-            Spacer()
+            // Difficulty Icon
+            Image(systemName: "gauge.medium")
+                .font(.system(size: 24))
+                .foregroundColor(difficultyColor)
             
             // Difficulty Text and Rating
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Difficulty")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)
                 
-                HStack(spacing: 4) {
+                HStack(spacing: 8) {
                     Text(difficultyText)
                         .font(.headline)
                         .fontWeight(.semibold)
@@ -490,6 +484,8 @@ struct DifficultyRatingCard: View {
                         .foregroundColor(.secondary)
                 }
             }
+            
+            Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)

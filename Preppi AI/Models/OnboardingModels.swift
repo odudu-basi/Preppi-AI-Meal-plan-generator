@@ -8,12 +8,25 @@
 import Foundation
 
 // MARK: - User Data Models
+struct WeightRange: Equatable, Codable {
+    let min: Double
+    let max: Double
+    
+    init(min: Double, max: Double) {
+        self.min = min
+        self.max = max
+    }
+}
+
 struct UserOnboardingData: Equatable {
     var name: String = ""
     var sex: Sex? = nil
+    var country: String? = nil
     var likesToCook: Bool? = nil
     var cookingPreference: CookingPreference? = nil
     var marketingSource: MarketingSource? = nil
+    var hasTriedCalorieTracking: Bool? = nil
+    var hasTriedMealPlanning: Bool? = nil
     var motivations: Set<Motivation> = []
     var motivationOther: String = ""
     var challenges: Set<Challenge> = []
@@ -22,9 +35,21 @@ struct UserOnboardingData: Equatable {
     var weight: Double = 0.0
     var height: Int = 0
     var activityLevel: ActivityLevel = .sedentary
+    var targetWeight: Double? = nil
+    var targetWeightRange: WeightRange? = nil
+    var weightLossSpeed: WeightLossSpeed? = nil
     var dietaryRestrictions: Set<DietaryRestriction> = []
     var foodAllergies: Set<Allergy> = []
     var weeklyBudget: Double? = nil
+    var nutritionPlan: NutritionPlan? = nil
+    var onboardingCompletedAt: Date? = nil // Date when user completed onboarding
+    var accountCreatedAt: Date? = nil // Date when user account was created (fallback for start date)
+    var progressStartDate: Date? = nil // Date when user started their 3-month progress tracking journey
+
+    // Helper to check if user needs pace selection
+    var needsPaceSelection: Bool {
+        return healthGoals.contains(.loseWeight) || healthGoals.contains(.gainWeight)
+    }
 }
 
 
@@ -256,41 +281,65 @@ enum DietaryRestriction: String, CaseIterable, Identifiable, Codable {
 }
 
 enum MarketingSource: String, CaseIterable, Identifiable, Codable {
+    case appStore = "App Store"
     case instagram = "Instagram"
     case tiktok = "TikTok"
-    case friend = "Friend"
-    case x = "X (Twitter)"
-    
+    case facebook = "Facebook"
+    case google = "Google"
+    case youtube = "Youtube"
+    case friendOrFamily = "Friend or family"
+
     var id: String { self.rawValue }
-    
+
     var emoji: String {
         switch self {
+        case .appStore: return "📱"
         case .instagram: return "📷"
         case .tiktok: return "🎵"
-        case .friend: return "👥"
-        case .x: return "🐦"
+        case .facebook: return "👍"
+        case .google: return "🔍"
+        case .youtube: return "📺"
+        case .friendOrFamily: return "👥"
         }
     }
-    
+
     var icon: String {
         switch self {
-        case .instagram: return "camera.fill"
+        case .appStore: return "app.badge"
+        case .instagram: return "camera.circle.fill"
         case .tiktok: return "music.note"
-        case .friend: return "person.2.fill"
-        case .x: return "bird.fill"
+        case .facebook: return "person.3.fill"
+        case .google: return "globe"
+        case .youtube: return "play.tv.fill"
+        case .friendOrFamily: return "person.2.circle.fill"
         }
     }
-    
+
     var title: String {
         return self.rawValue
     }
-    
+
     var description: String {
         switch self {
-        case .instagram: return "Found us through Instagram posts or ads"
-        case .tiktok: return "Discovered us on TikTok videos"
-        case .friend: return "A friend recommended Preppi to me"
-        case .x: return "Saw us on X (formerly Twitter)"
+        case .appStore: return "Found us in the App Store"
+        case .instagram: return "Discovered us on Instagram"
+        case .tiktok: return "Found us on TikTok"
+        case .facebook: return "Saw us on Facebook"
+        case .google: return "Found us through Google Search"
+        case .youtube: return "Discovered us on YouTube"
+        case .friendOrFamily: return "Recommended by someone I know"
+        }
+    }
+
+    var customImageName: String? {
+        switch self {
+        case .appStore: return "logo-appstore"
+        case .instagram: return "logo-instagram"
+        case .tiktok: return "logo-tiktok"
+        case .facebook: return "logo-facebook"
+        case .google: return "logo-google"
+        case .youtube: return "logo-youtube"
+        case .friendOrFamily: return nil // Use SF Symbol for this one
         }
     }
 }
@@ -374,9 +423,9 @@ enum Allergy: String, CaseIterable, Identifiable, Codable {
     case sulfites = "Sulfites"
     case mustard = "Mustard"
     case celery = "Celery"
-    
+
     var id: String { self.rawValue }
-    
+
     var emoji: String {
         switch self {
         case .nuts: return "🌰"
@@ -392,5 +441,121 @@ enum Allergy: String, CaseIterable, Identifiable, Codable {
         case .mustard: return "🟡"
         case .celery: return "🥬"
         }
+    }
+}
+
+enum WeightLossSpeed: String, CaseIterable, Identifiable, Codable {
+    case slow = "Slow & Steady"
+    case medium = "Balanced"
+    case fast = "Aggressive"
+
+    var id: String { self.rawValue }
+
+    var emoji: String {
+        switch self {
+        case .slow: return "🐢"
+        case .medium: return "🚶"
+        case .fast: return "🏃"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .slow: return "tortoise.fill"
+        case .medium: return "figure.walk"
+        case .fast: return "figure.run"
+        }
+    }
+
+    var title: String {
+        return self.rawValue
+    }
+
+    var weeklyWeightLossLbs: Double {
+        switch self {
+        case .slow: return 0.5
+        case .medium: return 1.0
+        case .fast: return 2.0
+        }
+    }
+
+    var weeklyWeightLossKg: Double {
+        switch self {
+        case .slow: return 0.25
+        case .medium: return 0.5
+        case .fast: return 1.0
+        }
+    }
+
+    // For weight gain (positive values)
+    var weeklyWeightGainKg: Double {
+        switch self {
+        case .slow: return 0.25
+        case .medium: return 0.4
+        case .fast: return 0.5
+        }
+    }
+
+    var weeklyWeightGainLbs: Double {
+        switch self {
+        case .slow: return 0.5
+        case .medium: return 0.9
+        case .fast: return 1.1
+        }
+    }
+
+    func description(isWeightLoss: Bool) -> String {
+        if isWeightLoss {
+            switch self {
+            case .slow:
+                return "Lose ~0.5 lbs (0.25 kg) per week. Safe, sustainable, and easier to maintain."
+            case .medium:
+                return "Lose ~1 lb (0.5 kg) per week. The recommended standard for healthy weight loss."
+            case .fast:
+                return "Lose ~2 lbs (1 kg) per week. Aggressive approach for faster results."
+            }
+        } else {
+            // Weight gain
+            switch self {
+            case .slow:
+                return "Gain ~0.5 lbs (0.25 kg) per week. Slow, lean muscle-focused gain."
+            case .medium:
+                return "Gain ~0.9 lbs (0.4 kg) per week. Balanced muscle gain with minimal fat."
+            case .fast:
+                return "Gain ~1.1 lbs (0.5 kg) per week. Faster bulk with controlled surplus."
+            }
+        }
+    }
+
+    func detailedDescription(isWeightLoss: Bool) -> String {
+        if isWeightLoss {
+            switch self {
+            case .slow:
+                return "This gentle approach focuses on building sustainable habits. You'll have more flexibility with your diet and won't feel deprived."
+            case .medium:
+                return "A balanced approach that combines effectiveness with sustainability. This is what most health professionals recommend."
+            case .fast:
+                return "An aggressive but safe approach. Requires more discipline and dietary restrictions. Best for those highly motivated."
+            }
+        } else {
+            // Weight gain
+            switch self {
+            case .slow:
+                return "A methodical approach focusing on lean muscle gain with minimal fat. Perfect for those who want quality gains."
+            case .medium:
+                return "A balanced approach to building muscle while keeping fat gain minimal. Recommended for most people."
+            case .fast:
+                return "An assertive approach for faster muscle and weight gain. Requires consistent training and nutrition discipline."
+            }
+        }
+    }
+
+    // Legacy properties for backward compatibility
+    var description: String {
+        return description(isWeightLoss: true)
+    }
+
+    var detailedDescription: String {
+        return detailedDescription(isWeightLoss: true)
     }
 }

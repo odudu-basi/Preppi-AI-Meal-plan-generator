@@ -10,6 +10,10 @@ class MixpanelService: ObservableObject {
     
     private func configure() {
         let token = ConfigurationService.shared.mixpanelToken
+        guard !token.isEmpty else {
+            print("⚠️ Mixpanel not initialized: empty token in APIKeys.plist")
+            return
+        }
         Mixpanel.initialize(token: token, trackAutomaticEvents: false)
         print("✅ Mixpanel initialized with token: \(String(token.prefix(8)))...")
     }

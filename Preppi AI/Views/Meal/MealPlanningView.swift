@@ -362,8 +362,44 @@ struct MealPlanningView: View {
                     .multilineTextAlignment(.center)
                     .foregroundColor(.primary)
                     .padding(.horizontal, 24)
+
+                // Calories and Servings Info
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        Text("\(dayMeal.meal.calories) cal")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.orange.opacity(0.1))
+                    )
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Text("1 serving")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.green)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.green.opacity(0.1))
+                    )
+                }
+                .padding(.top, 8)
             }
-            
+
             // Meal Image or Description Section
             VStack(spacing: 16) {
                 if let imageUrl = dayMeal.meal.imageUrl, !imageUrl.isEmpty {

@@ -11,33 +11,25 @@ import RevenueCatUI
 
 struct PreppiLogo: View {
     var body: some View {
-        VStack(spacing: 20) {
-            // App Icon
-            ZStack {
-                // Shadow background
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(Color.black.opacity(0.1))
-                    .frame(width: 124, height: 124)
-                    .offset(x: 2, y: 2)
-                
-                // App icon with rounded corners
-                Image("AppLogo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 120, height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-            }
+        // App Icon only
+        ZStack {
+            // Shadow background
+            RoundedRectangle(cornerRadius: 22)
+                .fill(Color.black.opacity(0.1))
+                .frame(width: 124, height: 124)
+                .offset(x: 2, y: 2)
             
-            // PREPPI text
-            Text("PREPPI")
-                .font(.system(size: 36, weight: .heavy, design: .default))
-                .foregroundColor(.green)
-                .tracking(4)
+            // App icon with rounded corners
+            Image("AppLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 120, height: 120)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
         }
     }
 }
@@ -52,18 +44,23 @@ struct ContentView: View {
                 SplashScreenView {
                     appState.showSplashScreen = false
                 }
-            } else if appState.shouldShowGetStarted {
-                // Show get started page for new users
-                GetStartedView()
+            } else if !appState.isAuthenticated && !appState.isGuestOnboarding && !appState.needsSignUpAfterOnboarding {
+                // NEW: Show welcome entry screen for non-authenticated users
+                WelcomeEntryView()
                     .environmentObject(appState)
-            } else if appState.shouldShowAuth {
-                // Show authentication if not signed in
-                SignInSignUpView()
+            } else if appState.isGuestOnboarding {
+                // NEW: Show onboarding for guest users (not authenticated yet)
+                OnboardingView()
+                    .environmentObject(appState)
+            } else if appState.needsSignUpAfterOnboarding && !appState.isAuthenticated {
+                // NEW: Show signup screen after guest completes onboarding
+                PostOnboardingSignUpView()
                     .environmentObject(appState)
             } else if appState.shouldShowLoading {
                 // Show loading state for general app loading or checking entitlements
                 VStack(spacing: 16) {
                     ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .green))
                         .scaleEffect(1.5)
                     Text(appState.isCheckingEntitlements ? "Verifying subscription..." : "Loading...")
                         .font(.subheadline)
@@ -76,7 +73,7 @@ struct ContentView: View {
                 OnboardingView()
                     .environmentObject(appState)
             } else if appState.shouldShowPaywall {
-                // Show paywall if authenticated and onboarded but no Pro access
+                // Show RevenueCat paywall if authenticated and onboarded but no Pro access
                 PaywallRequiredView()
                     .environmentObject(appState)
             } else if appState.canAccessMainApp {
@@ -87,6 +84,7 @@ struct ContentView: View {
                 // Fallback loading state
                 VStack {
                     ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .green))
                         .scaleEffect(1.5)
                     Text("Loading...")
                         .font(.subheadline)
@@ -114,7 +112,7 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            CameraView()
+            HomeView()
                 .environmentObject(appState)
                 .tabItem {
                     Image(systemName: "house.fill")
@@ -122,13 +120,21 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            HomeView()
+            CameraView()
                 .environmentObject(appState)
                 .tabItem {
-                    Image(systemName: "fork.knife")
-                    Text("Meal Planning")
+                    Image(systemName: "camera.fill")
+                    Text("Camera")
                 }
                 .tag(1)
+
+            ProgressTabView()
+                .environmentObject(appState)
+                .tabItem {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                    Text("Progress")
+                }
+                .tag(2)
             
             SettingsView()
                 .environmentObject(appState)
@@ -136,42 +142,73 @@ struct MainTabView: View {
                     Image(systemName: "gear")
                     Text("Settings")
                 }
-                .tag(2)
+                .tag(3)
         }
         .accentColor(.green)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SharedImageReceived"))) { notification in
+            if let sharedImage = notification.object as? UIImage {
+                print("📸 MainTabView received shared image notification")
+                appState.handleSharedImage(sharedImage)
+                // Switch to Camera tab (CameraView) to show the photo processing
+                selectedTab = 1
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CheckForSharedImage"))) { _ in
+            print("📸 MainTabView received check for shared image notification")
+            // Switch to Camera tab first
+            selectedTab = 1
+            // Trigger shared image check
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NotificationCenter.default.post(name: NSNotification.Name("TriggerSharedImageCheck"), object: nil)
+            }
+        }
     }
 }
 
-    // MARK: - Home View
-    struct HomeView: View {
-        @EnvironmentObject var appState: AppState
-        @State private var showingFounderUpdates = false
-        @State private var navigationPath = NavigationPath()
-        @State private var selectedDate = Date()
-        @State private var weekOffset = 0
-        @Environment(\.colorScheme) var colorScheme
-        
-        private let databaseService = MealPlanDatabaseService.shared
-        @StateObject private var streakService = StreakService.shared
-        @State private var dailyNutrition: DailyNutritionSummary?
-        @State private var isLoading = false
-        @State private var selectedDayMeal: DayMeal? // Dinner meal
-        @State private var selectedBreakfastMeal: DayMeal? // Breakfast meal
-        @State private var selectedLunchMeal: DayMeal? // Lunch meal
-        @State private var showingMealPlanExistsAlert = false
-        @State private var existingMealPlanWeek: String = ""
-        @State private var existingMealPlanId: UUID? // ID of existing meal plan to be replaced
-        @State private var showingShoppingList = false
-        @State private var currentMealPlanId: UUID? // For shopping list (can be any meal plan)
-        @State private var breakfastMealPlanId: UUID?
-        @State private var lunchMealPlanId: UUID?
-        @State private var dinnerMealPlanId: UUID?
-        @State private var showingMealEditPopup = false
-        @State private var showingStreakDetails = false
-        
-            // Performance optimization: Cache meal plans to avoid repeated database calls
+// MARK: - Home View
+struct HomeView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var showingFounderUpdates = false
+    @State private var navigationPath = NavigationPath()
+    @State private var selectedDate = Date()
+    @State private var weekOffset = 0
+    @Environment(\.colorScheme) var colorScheme
+    
+    private let databaseService = MealPlanDatabaseService.shared
+    @StateObject private var streakService = StreakService.shared
+    @State private var dailyNutrition: DailyNutritionSummary?
+    @State private var isLoading = false
+    @State private var selectedDayMeal: DayMeal? // Dinner meal
+    @State private var selectedBreakfastMeal: DayMeal? // Breakfast meal
+    @State private var selectedLunchMeal: DayMeal? // Lunch meal
+    @State private var showingMealPlanExistsAlert = false
+    @State private var existingMealPlanWeek: String = ""
+    @State private var existingMealPlanId: UUID? // ID of existing meal plan to be replaced
+    @State private var showingShoppingList = false
+    @State private var currentMealPlanId: UUID? // For shopping list (can be any meal plan)
+    @State private var breakfastMealPlanId: UUID?
+    @State private var lunchMealPlanId: UUID?
+    @State private var dinnerMealPlanId: UUID?
+    @State private var showingMealEditPopup = false
+    @State private var showingStreakDetails = false
+    @State private var showingMealPlanOnboarding = false
+    @State private var showingCameraForMeal = false
+    @State private var showingImagePicker = false
+    @State private var sourceType: UIImagePickerController.SourceType = .camera
+    @State private var showingMealAnalysis = false
+    @State private var selectedMealImage: UIImage?
+    @State private var mealAnalysisResult: MealAnalysisResult?
+    @State private var isAnalyzingMeal = false
+    @StateObject private var loggedMealService = LoggedMealService.shared
+    @State private var showingLoggedMealDetail = false
+    @State private var selectedLoggedMeal: LoggedMeal?
+    @State private var pendingMealType: String? // Track which meal type is being logged
+    
+    // Performance optimization: Cache meal plans to avoid repeated database calls
     @State private var cachedMealPlans: [DatabaseMealPlan] = []
     @State private var lastMealPlansUpdate: Date = Date.distantPast
+    @State private var cachedMealPlanDetails: [UUID: MealPlan] = [:] // Cache for full meal plan details
+    @State private var lastMealPlanDetailsUpdate: [UUID: Date] = [:] // Track when each was last updated
     
 
     
@@ -190,75 +227,11 @@ struct MainTabView: View {
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack {
-                // Subtle vertical gradient background
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color("AppBackground"),
-                        Color(.systemGray6).opacity(0.3)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Top section with logo
-                        topSection
-                        
-                        // Week day selector
-                        weekDaySelector
-                        
-                        // Daily plan summary
-                        dailyPlanSummary
-                        
-                        // Action buttons
-                        actionButtons
-                        
-                        // Bottom spacing
-                        Color.clear.frame(height: 100)
-                    }
-                }
-                
-                // Floating pencil icon at bottom right
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            showingMealEditPopup = true
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 56, height: 56)
-                                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                                
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 28, weight: .medium))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                    }
-                }
-            }
+            mainContent
             .navigationBarHidden(true)
             .navigationDestination(for: String.self) { destination in
-                switch destination {
-                case "MealPlanInfo":
-                    MealPlanInfoView()
-                        .environmentObject(appState)
-                case "ViewMealPlans":
-                    ViewMealPlansView()
-                        .environmentObject(appState)
-                default:
-                    EmptyView()
-                }
+                navigationDestination(for: destination)
             }
-
             .onChange(of: appState.shouldDismissMealPlanFlow) { shouldDismiss in
                 if shouldDismiss {
                     navigationPath = NavigationPath()
@@ -279,13 +252,24 @@ struct MainTabView: View {
                 loadDailyNutrition()
                 loadSelectedDayMeal()
                 streakService.loadStreakData()
+                print("🔄 Refreshing logged meals on HomeView appear...")
+                loggedMealService.refreshMeals()
+                
+                // Debug: Print all logged meals after refresh
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    print("📊 Total logged meals: \(loggedMealService.loggedMeals.count)")
+                    for meal in loggedMealService.loggedMeals {
+                        print("📊 Meal: \(meal.mealName) - \(meal.loggedAt) - Type: \(meal.mealType ?? "extra")")
+                    }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 // Refresh streak data when app becomes active
                 streakService.refreshStreakData()
             }
-
-            .onChange(of: selectedDate) { _ in
+            .onChange(of: selectedDate) { newDate in
+                // Load data for the new date
+                // These functions now use caching for instant updates
                 loadDailyNutrition()
                 loadSelectedDayMeal()
             }
@@ -325,6 +309,172 @@ struct MainTabView: View {
         .sheet(isPresented: $showingStreakDetails) {
             StreakDetailsView()
                 .environmentObject(streakService)
+        }
+        .sheet(isPresented: $showingMealPlanOnboarding) {
+            MealPlanOnboardingView()
+                .environmentObject(appState)
+        }
+        .confirmationDialog("Select Photo", isPresented: $showingCameraForMeal, titleVisibility: .visible) {
+            Button("Take Photo") {
+                sourceType = .camera
+                showingImagePicker = true
+            }
+            
+            Button("Choose from Library") {
+                sourceType = .photoLibrary
+                showingImagePicker = true
+            }
+            
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Choose how you'd like to add your photo")
+        }
+        .sheet(isPresented: $showingImagePicker) {
+            ImagePicker(sourceType: sourceType) { image in
+                print("📱 HomeView: Received image from picker for meal logging")
+                selectedMealImage = image
+                // Dismiss the picker immediately and start analysis
+                showingImagePicker = false
+                analyzeMealImage(image)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDeviceCamera"))) { _ in
+            print("📸 HomeView received open device camera notification")
+            showingCameraForMeal = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DismissMealPlanOnboarding"))) { _ in
+            print("📱 HomeView received dismiss meal plan onboarding notification")
+            showingMealPlanOnboarding = false
+        }
+        .onChange(of: selectedDate) { newDate in
+            // Update current preferences when date changes to handle week transitions
+            appState.updateCurrentPreferences(for: newDate)
+        }
+        .fullScreenCover(isPresented: $showingMealAnalysis) {
+            if let image = selectedMealImage, let result = mealAnalysisResult {
+                MealAnalysisResultView(
+                    mealImage: image,
+                    analysisResult: result,
+                    onDone: {
+                        showingMealAnalysis = false
+                        selectedMealImage = nil
+                        mealAnalysisResult = nil
+                    },
+                    onAddDetails: {
+                        // TODO: Implement add details functionality
+                        print("Add details tapped")
+                    },
+                    onLogMeal: {
+                        // Log the meal with meal type if specified, using the selected date
+                        loggedMealService.logMeal(from: result, image: image, mealType: pendingMealType, loggedDate: selectedDate)
+                        
+                        // Track in Mixpanel
+                        MixpanelService.shared.track(
+                            event: MixpanelService.Events.mealButtonTapped,
+                            properties: [
+                                MixpanelService.Properties.mealName: result.mealName,
+                                MixpanelService.Properties.calories: result.calories,
+                                MixpanelService.Properties.mealType: "logged_meal"
+                            ]
+                        )
+                        
+                        // Close the analysis view
+                        showingMealAnalysis = false
+                        selectedMealImage = nil
+                        mealAnalysisResult = nil
+                        pendingMealType = nil // Clear pending meal type
+                    }
+                )
+            }
+        }
+        .overlay {
+            if isAnalyzingMeal {
+                AnalyzingFoodLoadingView()
+            }
+        }
+        .fullScreenCover(item: $selectedLoggedMeal, onDismiss: {
+            selectedLoggedMeal = nil
+        }) { meal in
+            LoggedMealDetailView(loggedMeal: meal)
+        }
+    }
+    
+    // MARK: - Main Content
+    private var mainContent: some View {
+        ZStack {
+            // Subtle vertical gradient background
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color("AppBackground"),
+                    Color(.systemGray6).opacity(0.3)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Top section with logo
+                    topSection
+                    
+                    // Week day selector
+                    weekDaySelector
+                    
+                    // Daily plan summary
+                    dailyPlanSummary
+                    
+                    // Action buttons
+                    actionButtons
+                    
+                    // Bottom spacing
+                    Color.clear.frame(height: 100)
+                }
+            }
+            
+            // Floating pencil icon at bottom right
+            floatingEditButton
+        }
+    }
+    
+    // MARK: - Navigation Destination
+    @ViewBuilder
+    private func navigationDestination(for destination: String) -> some View {
+        switch destination {
+        case "MealPlanInfo":
+            MealPlanInfoView()
+                .environmentObject(appState)
+        case "ViewMealPlans":
+            ViewMealPlansView()
+                .environmentObject(appState)
+        default:
+            EmptyView()
+        }
+    }
+    
+    // MARK: - Floating Edit Button
+    private var floatingEditButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button(action: {
+                    showingMealEditPopup = true
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 56, height: 56)
+                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        
+                        Image(systemName: "pencil")
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
+            }
         }
     }
     
@@ -450,28 +600,128 @@ struct MainTabView: View {
                     VStack(spacing: 20) {
             // Calories left card
             caloriesCard
-            
+
+            // Check if all meals are empty
+            let hasNoMeals = selectedBreakfastMeal == nil && selectedLunchMeal == nil && selectedDayMeal == nil
+
             // Meal cards section
             VStack(spacing: 12) {
-                // Breakfast section
-                if let breakfastMeal = selectedBreakfastMeal {
-                    simplifiedMealCard(dayMeal: breakfastMeal, mealType: "breakfast")
+                // Show Start button if no weekly preference has been set for the current week
+                if hasNoMeals && !appState.hasWeeklyMealPlanPreference(for: selectedDate) {
+                    startButton
+                    
+                    // Extra meal logging section for NoView
+                    VStack(spacing: 16) {
+                        // Section title
+                        HStack {
+                            Text("Track Additional Meals")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        
+                        // Extra meal logging card
+                        extraMealCard
+                        
+                        // Extra logged meals for the selected date (only meals without specific meal types)
+                        let extraLoggedMealsForDate = loggedMealService.getLoggedMealsForDate(selectedDate).filter { $0.mealType == nil }
+                        if extraLoggedMealsForDate.isEmpty {
+                            Text("No extra logged meals for today")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.vertical, 8)
+                        } else {
+                            ForEach(extraLoggedMealsForDate) { loggedMeal in
+                                LoggedMealCard(loggedMeal: loggedMeal) {
+                                    print("📱 Tapping extra logged meal (NoView): \(loggedMeal.mealName)")
+                                    print("📱 Setting selectedLoggedMeal to: \(loggedMeal.id)")
+                                    print("📱 Meal has imageUrl: \(loggedMeal.imageUrl != nil)")
+                                    print("📱 Meal calories: \(loggedMeal.calories)")
+                                    
+                                    // Ensure UI update happens on main thread
+                                    DispatchQueue.main.async {
+                                        selectedLoggedMeal = loggedMeal
+                                        print("📱 NoView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
-                    addMealButton(mealType: "Breakfast", icon: "sunrise.fill", color: .orange)
-                }
-                
-                // Lunch section
-                if let lunchMeal = selectedLunchMeal {
-                    simplifiedMealCard(dayMeal: lunchMeal, mealType: "lunch")
-                } else {
-                    addMealButton(mealType: "Lunch", icon: "sun.max.fill", color: .yellow)
-                }
-                
-                // Dinner section
-                if let dinnerMeal = selectedDayMeal {
-                    simplifiedMealCard(dayMeal: dinnerMeal, mealType: "dinner")
-                } else {
-                    addMealButton(mealType: "Dinner", icon: "moon.fill", color: .purple)
+                    // Breakfast section
+                    if let loggedBreakfast = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "breakfast") {
+                        LoggedMealCard(loggedMeal: loggedBreakfast) {
+                            print("📱 Tapping logged breakfast (YesView): \(loggedBreakfast.mealName)")
+                            DispatchQueue.main.async {
+                                selectedLoggedMeal = loggedBreakfast
+                                print("📱 Breakfast YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                            }
+                        }
+                    } else if let breakfastMeal = selectedBreakfastMeal {
+                        simplifiedMealCard(dayMeal: breakfastMeal, mealType: "breakfast")
+                    } else {
+                        addMealButton(mealType: "Breakfast", icon: "sunrise.fill", color: .orange)
+                    }
+
+                    // Lunch section
+                    if let loggedLunch = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "lunch") {
+                        LoggedMealCard(loggedMeal: loggedLunch) {
+                            print("📱 Tapping logged lunch (YesView): \(loggedLunch.mealName)")
+                            DispatchQueue.main.async {
+                                selectedLoggedMeal = loggedLunch
+                                print("📱 Lunch YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                            }
+                        }
+                    } else if let lunchMeal = selectedLunchMeal {
+                        simplifiedMealCard(dayMeal: lunchMeal, mealType: "lunch")
+                    } else {
+                        addMealButton(mealType: "Lunch", icon: "sun.max.fill", color: .yellow)
+                    }
+
+                    // Dinner section
+                    if let loggedDinner = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "dinner") {
+                        LoggedMealCard(loggedMeal: loggedDinner) {
+                            print("📱 Tapping logged dinner (YesView): \(loggedDinner.mealName)")
+                            DispatchQueue.main.async {
+                                selectedLoggedMeal = loggedDinner
+                                print("📱 Dinner YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                            }
+                        }
+                    } else if let dinnerMeal = selectedDayMeal {
+                        simplifiedMealCard(dayMeal: dinnerMeal, mealType: "dinner")
+                    } else {
+                        addMealButton(mealType: "Dinner", icon: "moon.fill", color: .purple)
+                    }
+                    
+                    // Extra meal logging card
+                    extraMealCard
+                    
+                    // Extra logged meals for the selected date (only meals without specific meal types)
+                    let extraLoggedMealsForDate = loggedMealService.getLoggedMealsForDate(selectedDate).filter { $0.mealType == nil }
+                    if extraLoggedMealsForDate.isEmpty {
+                        Text("No extra logged meals for today")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(extraLoggedMealsForDate) { loggedMeal in
+                            LoggedMealCard(loggedMeal: loggedMeal) {
+                                print("📱 Tapping extra logged meal: \(loggedMeal.mealName)")
+                                print("📱 Setting selectedLoggedMeal to: \(loggedMeal.id)")
+                                print("📱 Meal has imageUrl: \(loggedMeal.imageUrl != nil)")
+                                print("📱 Meal calories: \(loggedMeal.calories)")
+                                
+                                // Ensure UI update happens on main thread
+                                DispatchQueue.main.async {
+                                    selectedLoggedMeal = loggedMeal
+                                    print("📱 UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -491,12 +741,48 @@ struct MainTabView: View {
                 ]
             )
             
-            if mealType == "Breakfast" {
-                checkAndCreateBreakfastMealPlan()
-            } else if mealType == "Lunch" {
-                checkAndCreateLunchMealPlan()
-            } else if mealType == "Dinner" {
-                checkAndCreateDinnerMealPlan()
+            // Check if we're in NoView (no meals and no weekly preference)
+            let hasNoMeals = selectedBreakfastMeal == nil && selectedLunchMeal == nil && selectedDayMeal == nil
+            let isNoView = hasNoMeals && !appState.hasWeeklyMealPlanPreference(for: selectedDate)
+            
+            if isNoView {
+                // NoView: Use camera flow for meal logging
+                // Check if this meal type already exists for today
+                if loggedMealService.hasLoggedMealForDateAndType(selectedDate, mealType: mealType.lowercased()) {
+                    // Already have a meal of this type for today - do nothing
+                    print("⚠️ Already have a \(mealType.lowercased()) logged for today")
+                    return
+                }
+                
+                // Set pending meal type and open camera
+                pendingMealType = mealType.lowercased()
+                showingCameraForMeal = true
+            } else {
+                // Regular view: Check weekly preference
+                if let weeklyPreference = appState.getWeeklyMealPlanPreference(for: selectedDate) {
+                    if !weeklyPreference {
+                        // User chose "No" - photo logging
+                        appState.openDeviceCamera()
+                    } else {
+                        // User chose "Yes" - meal plan creation
+                        if mealType == "Breakfast" {
+                            checkAndCreateBreakfastMealPlan()
+                        } else if mealType == "Lunch" {
+                            checkAndCreateLunchMealPlan()
+                        } else if mealType == "Dinner" {
+                            checkAndCreateDinnerMealPlan()
+                        }
+                    }
+                } else {
+                    // No preference set - default to meal plan creation
+                    if mealType == "Breakfast" {
+                        checkAndCreateBreakfastMealPlan()
+                    } else if mealType == "Lunch" {
+                        checkAndCreateLunchMealPlan()
+                    } else if mealType == "Dinner" {
+                        checkAndCreateDinnerMealPlan()
+                    }
+                }
             }
         }) {
             HStack(spacing: 12) {
@@ -511,14 +797,14 @@ struct MainTabView: View {
                             .fontWeight(.medium)
                         .foregroundColor(.primary)
                     
-                    Text("Tap to add \(mealType.lowercased()) to your day")
+                    Text(getButtonSubtitle(for: mealType))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
-                Image(systemName: "plus.circle")
+                Image(systemName: getButtonIcon())
                     .font(.title2)
                     .foregroundColor(.gray)
             }
@@ -532,64 +818,188 @@ struct MainTabView: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-
     
-    private var caloriesCard: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("\(remainingCaloriesForSelectedDay)")
-                    .font(.system(size: 48, weight: .bold, design: .default))
-                    .foregroundColor(.primary)
-                
-                Text("Remaining calories")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                if totalCaloriesForSelectedDay - remainingCaloriesForSelectedDay > 0 {
-                    Text("Consumed: \(totalCaloriesForSelectedDay - remainingCaloriesForSelectedDay) cal")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
-                
-                Text("Goal: \(totalCaloriesForSelectedDay) cal")
-                    .font(.caption)
-                    .foregroundColor(Color.gray.opacity(0.6))
-            }
-            
-            Spacer()
-            
-            // Circular progress ring
-            ZStack {
-                Circle()
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 8)
-                    .frame(width: 80, height: 80)
-                
-                Circle()
-                    .trim(from: 0, to: CGFloat(caloriesProgress))
-                    .stroke(
-                        progressRingColor,
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 80, height: 80)
-                    .rotationEffect(.degrees(-90))
-                
-                VStack(spacing: 2) {
-                    Image(systemName: "flame.fill")
-                        .font(.title2)
-                        .foregroundColor(progressRingColor)
-                    
-                    Text("\(Int(caloriesProgress * 100))%")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(progressRingColor)
-                }
+    // MARK: - Helper Methods for Add Meal Button
+    private func getButtonSubtitle(for mealType: String) -> String {
+        if let weeklyPreference = appState.getWeeklyMealPlanPreference(for: selectedDate) {
+            if weeklyPreference {
+                return "Tap to add \(mealType.lowercased()) to your day"
+            } else {
+                return "Tap to take a photo of your \(mealType.lowercased())"
             }
         }
-        .padding(20)
+        return "Tap to add \(mealType.lowercased()) to your day"
+    }
+    
+    private func getButtonIcon() -> String {
+        if let weeklyPreference = appState.getWeeklyMealPlanPreference(for: selectedDate) {
+            return weeklyPreference ? "plus.circle" : "camera.fill"
+        }
+        return "plus.circle"
+    }
+    
+    // MARK: - Extra Meal Card
+    private var extraMealCard: some View {
+        Button(action: {
+            // Track extra meal logging in Mixpanel
+            MixpanelService.shared.track(
+                event: MixpanelService.Events.mealButtonTapped,
+                properties: [
+                    MixpanelService.Properties.mealType: "extra",
+                    MixpanelService.Properties.source: "home_screen"
+                ]
+            )
+            
+            // Open camera for extra meal logging
+            showingCameraForMeal = true
+        }) {
+            HStack(spacing: 16) {
+                // Camera icon
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Log Extra Meal")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    
+                    Text("Take a photo to analyze")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.green)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    // MARK: - Start Button
+    private var startButton: some View {
+        VStack(spacing: 20) {
+            // Breakfast section - show LoggedMealCard if exists, otherwise meal button
+            if let breakfastMeal = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "breakfast") {
+                LoggedMealCard(loggedMeal: breakfastMeal) {
+                    print("📱 Tapping logged breakfast: \(breakfastMeal.mealName)")
+                    DispatchQueue.main.async {
+                        selectedLoggedMeal = breakfastMeal
+                        print("📱 Breakfast UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                    }
+                }
+            } else {
+                addMealButton(mealType: "Breakfast", icon: "sunrise.fill", color: .orange)
+            }
+
+            // Start button in the middle
+            Button(action: {
+                showingMealPlanOnboarding = true
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.title)
+                        .foregroundColor(.white)
+
+                    Text("Start")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .background(
+                    LinearGradient(
+                        colors: [.green, .mint],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(16)
+                .shadow(color: .green.opacity(0.4), radius: 12, x: 0, y: 6)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            // Lunch section - show LoggedMealCard if exists, otherwise meal button
+            if let lunchMeal = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "lunch") {
+                LoggedMealCard(loggedMeal: lunchMeal) {
+                    print("📱 Tapping logged lunch: \(lunchMeal.mealName)")
+                    DispatchQueue.main.async {
+                        selectedLoggedMeal = lunchMeal
+                        print("📱 Lunch UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))") 
+                    }
+                }
+            } else {
+                addMealButton(mealType: "Lunch", icon: "sun.max.fill", color: .yellow)
+            }
+
+            // Dinner section - show LoggedMealCard if exists, otherwise meal button
+            if let dinnerMeal = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "dinner") {
+                LoggedMealCard(loggedMeal: dinnerMeal) {
+                    print("📱 Tapping logged dinner: \(dinnerMeal.mealName)")
+                    DispatchQueue.main.async {
+                        selectedLoggedMeal = dinnerMeal
+                        print("📱 Dinner UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                    }
+                }
+            } else {
+                addMealButton(mealType: "Dinner", icon: "moon.fill", color: .purple)
+            }
+        }
+    }
+
+    // MARK: - Disabled Meal Button
+    private func disabledMealButton(mealType: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color.opacity(0.3))
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Add \(mealType)")
+                    .font(.headline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary.opacity(0.3))
+
+                Text("Tap to add \(mealType.lowercased()) to your day")
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.3))
+            }
+
+            Spacer()
+
+            Image(systemName: "plus.circle")
+                .font(.title2)
+                .foregroundColor(.gray.opacity(0.3))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                .foregroundColor(.gray.opacity(0.3))
+        )
+        .opacity(0.5)
+    }
+
+    private var caloriesCard: some View {
+        SwipeableNutritionCard(
+            totalCaloriesForSelectedDay: max(totalCaloriesForSelectedDay, 1200),
+            remainingCaloriesForSelectedDay: max(remainingCaloriesForSelectedDay, 0),
+            caloriesProgress: max(min(caloriesProgress, 1.0), 0.0),
+            progressRingColor: progressRingColor,
+            userData: appState.userData
         )
     }
     
@@ -626,7 +1036,16 @@ struct MainTabView: View {
     // MARK: - Helper Properties
     private var totalCaloriesForSelectedDay: Int {
         // Return the user's daily calorie goal based on their profile and goals
-        return CalorieCalculationService.shared.calculateDailyCalorieGoal(for: appState.userData)
+        // Add defensive programming to prevent crashes
+        guard appState.userData.age > 0,
+              appState.userData.weight > 0,
+              appState.userData.height > 0 else {
+            // Return a reasonable default if user data is incomplete
+            return 2000
+        }
+        
+        let calories = CalorieCalculationService.shared.calculateDailyCalorieGoal(for: appState.userData)
+        return max(calories, 1200) // Ensure minimum safe value
     }
     
     private var remainingCaloriesForSelectedDay: Int {
@@ -639,13 +1058,17 @@ struct MainTabView: View {
         
         // Calculate consumed calories from completed meals
         for mealInstance in mealsForDate {
-            if mealInstance.completion != .none {
-                // Find the corresponding meal to get its calories
+            if mealInstance.completion == .ateExact {
+                // User ate the exact planned meal - use planned meal calories
                 if let meal = getMealForType(mealInstance.mealType) {
                     consumedCalories += meal.calories
                 }
             }
+            // Note: If completion is .ateSimilar, calories will be counted from logged meals instead
         }
+
+        // Add calories from logged meals (includes meals marked as .ateSimilar)
+        consumedCalories += loggedMealService.getTotalCaloriesForDate(selectedDate)
         
         // Return remaining calories (daily goal - consumed)
         return max(0, dailyGoal - consumedCalories)
@@ -725,6 +1148,11 @@ struct MainTabView: View {
                     date: selectedDate,
                     mealType: mealType,
                     currentCompletion: getCurrentCompletion(for: selectedDate, mealType: mealType),
+                    onMealReplacement: { replacementMealType in
+                        // Handle meal replacement with camera flow
+                        pendingMealType = replacementMealType
+                        showingCameraForMeal = true
+                    },
                     streakService: streakService
                 )
                 
@@ -749,8 +1177,8 @@ struct MainTabView: View {
                     .font(.title3)
                     .fontWeight(.bold)
                     .foregroundColor(.orange)
-                
-                Text("calories")
+
+                Text("cal/serving")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -824,8 +1252,12 @@ struct MainTabView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text("\(dayMeal.meal.calories) cal")
                             .font(.headline)
-                                    .fontWeight(.semibold)
+                            .fontWeight(.semibold)
                             .foregroundColor(.orange)
+
+                        Text("(1 serving)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                         
                         HStack(spacing: 4) {
                             Image(systemName: "clock.fill")
@@ -945,11 +1377,8 @@ struct MainTabView: View {
         let mealsForDate = streakService.weekCompletions[normalizedDate] ?? []
         let completion = mealsForDate.first { $0.mealType == mealType }?.completion
         
-        print("🔍 Getting completion for \(mealType) on \(normalizedDate): \(completion?.rawValue ?? "nil")")
-        print("   - Original date: \(date)")
-        print("   - Normalized date: \(normalizedDate)")
-        print("   - Available meals for date: \(mealsForDate.map { "\($0.mealType): \($0.completion)" })")
-        print("   - All available dates in weekCompletions: \(streakService.weekCompletions.keys.map { $0 }.sorted())")
+        // Getting completion for meal type
+        // Checking meal completion data
         
         return completion
     }
@@ -1000,26 +1429,22 @@ struct MainTabView: View {
     private func calculateDailyNutrition(for date: Date) async throws -> DailyNutritionSummary {
         // Calculate user's daily calorie goal based on their stats
         let dailyCalorieGoal = calculateDailyCalorieGoal(userData: appState.userData)
-        
-        // Get meal plans for the selected date
-        let mealPlans = try await databaseService.getUserMealPlans()
-        
-        // Find meals for the selected date
+
+        // Note: Actual consumed nutrients are calculated in the main view from logged meals
+        // This function just returns the goals/remaining values
+        // The consumed calories are calculated separately in the view
         var consumedCalories = 0
         var consumedProtein = 0.0
         var consumedCarbs = 0.0
         var consumedFat = 0.0
-        
-        // Calculate consumed nutrients (this would be from logged meals in a real app)
-        // For now, we'll use placeholder logic
-        
+
         let caloriesLeft = max(0, dailyCalorieGoal - consumedCalories)
         let proteinLeft = max(0.0, Double(dailyCalorieGoal) * 0.3 / 4 - consumedProtein) // 30% of calories from protein
         let carbsLeft = max(0.0, Double(dailyCalorieGoal) * 0.4 / 4 - consumedCarbs) // 40% from carbs
         let fatLeft = max(0.0, Double(dailyCalorieGoal) * 0.3 / 9 - consumedFat) // 30% from fat
-        
+
         let progress = Double(consumedCalories) / Double(dailyCalorieGoal)
-        
+
         return DailyNutritionSummary(
             caloriesLeft: caloriesLeft,
             proteinLeft: Int(proteinLeft),
@@ -1085,7 +1510,7 @@ struct MainTabView: View {
                 if now.timeIntervalSince(lastMealPlansUpdate) < 30 && !cachedMealPlans.isEmpty {
                     // Use cached data (cache is valid for 30 seconds)
                     mealPlans = cachedMealPlans
-                    print("🔄 Using cached meal plans (\(mealPlans.count) plans)")
+                    // Using cached meal plans
                 } else {
                     // Fetch fresh data and update cache
                     let freshMealPlans = try await databaseService.getUserMealPlans()
@@ -1094,14 +1519,10 @@ struct MainTabView: View {
                         lastMealPlansUpdate = now
                     }
                     mealPlans = freshMealPlans
-                    print("🔄 Fetched fresh meal plans (\(mealPlans.count) plans)")
+                    // Fetched fresh meal plans
                 }
                 
-                // DEBUG: Print all meal plans with their types
-                print("📋 DEBUG: All meal plans loaded:")
-                for (index, plan) in mealPlans.enumerated() {
-                    print("  [\(index)] \(plan.name) - Type: '\(plan.mealPlanType)' - Week: \(plan.weekStartDate) - ID: \(plan.id?.uuidString ?? "nil")")
-                }
+                // All meal plans loaded
                 
                 // Find meal plan that was created during the week of the selected date
                 let weekInterval = getWeekInterval(for: selectedDate)
@@ -1116,67 +1537,84 @@ struct MainTabView: View {
                 let expectedDayIndex = selectedWeekday - 1 // Sunday=1 becomes index 0, Monday=2 becomes index 1, etc.
                 
                 // Find meal plans for the same week
-                print("🔍 DEBUG: Looking for meal plans for selected date: \(selectedDate)")
-                print("🔍 DEBUG: Week interval: \(getWeekInterval(for: selectedDate))")
+                // Looking for meal plans for selected date
                 
                 let dinnerMealPlan = findDinnerMealPlanForWeek(mealPlans, weekOf: selectedDate)
                 let breakfastMealPlan = findBreakfastMealPlanForWeek(mealPlans, weekOf: selectedDate)
                 let lunchMealPlan = findLunchMealPlanForWeek(mealPlans, weekOf: selectedDate)
                 
-                print("🍽️ DEBUG: Found meal plans:")
-                print("  - Breakfast: \(breakfastMealPlan?.name ?? "nil") (ID: \(breakfastMealPlan?.id?.uuidString ?? "nil"))")
-                print("  - Lunch: \(lunchMealPlan?.name ?? "nil") (ID: \(lunchMealPlan?.id?.uuidString ?? "nil"))")
-                print("  - Dinner: \(dinnerMealPlan?.name ?? "nil") (ID: \(dinnerMealPlan?.id?.uuidString ?? "nil"))")
-                
-                // Performance optimization: Fetch meal plan details in parallel
-                async let dinnerDetails = dinnerMealPlan?.id != nil ? 
-                    databaseService.getMealPlanDetails(mealPlanId: dinnerMealPlan!.id!) : nil
-                async let breakfastDetails = breakfastMealPlan?.id != nil ? 
-                    databaseService.getMealPlanDetails(mealPlanId: breakfastMealPlan!.id!) : nil
-                async let lunchDetails = lunchMealPlan?.id != nil ? 
-                    databaseService.getMealPlanDetails(mealPlanId: lunchMealPlan!.id!) : nil
-                
+                // Found meal plans for breakfast, lunch, and dinner
+
+                // Performance optimization: Use cached meal plan details or fetch if needed
+                let fullDinnerMealPlan: MealPlan?
+                let fullBreakfastMealPlan: MealPlan?
+                let fullLunchMealPlan: MealPlan?
+
+                // Helper function to get or fetch meal plan details with caching
+                func getCachedOrFetchDetails(for mealPlan: DatabaseMealPlan?) async throws -> MealPlan? {
+                    guard let mealPlan = mealPlan, let mealPlanId = mealPlan.id else { return nil }
+
+                    // Check if we have a fresh cached version (valid for 5 minutes)
+                    if let cachedDetails = await MainActor.run(body: { cachedMealPlanDetails[mealPlanId] }),
+                       let lastUpdate = await MainActor.run(body: { lastMealPlanDetailsUpdate[mealPlanId] }),
+                       now.timeIntervalSince(lastUpdate) < 300 {
+                        // Using cached meal plan details for ID
+                        return cachedDetails
+                    }
+
+                    // Fetch fresh details and cache them
+                    let freshDetails = try await databaseService.getMealPlanDetails(mealPlanId: mealPlanId)
+                    await MainActor.run {
+                        cachedMealPlanDetails[mealPlanId] = freshDetails
+                        lastMealPlanDetailsUpdate[mealPlanId] = now
+                    }
+                    // Fetched and cached fresh meal plan details
+                    return freshDetails
+                }
+
+                // Fetch all meal plan details in parallel (using cache when available)
+                async let dinnerDetails = try getCachedOrFetchDetails(for: dinnerMealPlan)
+                async let breakfastDetails = try getCachedOrFetchDetails(for: breakfastMealPlan)
+                async let lunchDetails = try getCachedOrFetchDetails(for: lunchMealPlan)
+
                 // Wait for all parallel operations to complete
-                let (fullDinnerMealPlan, fullBreakfastMealPlan, fullLunchMealPlan) = 
+                (fullDinnerMealPlan, fullBreakfastMealPlan, fullLunchMealPlan) =
                     try await (dinnerDetails, breakfastDetails, lunchDetails)
                 
                 // Process dinner meal
                 var dayMeal: DayMeal? = nil
                 var dinnerPlanId: UUID? = nil
                 if let dinnerPlan = fullDinnerMealPlan {
-                    print("🔍 DEBUG: Looking for dinner meal with expectedDayIndex: \(expectedDayIndex)")
-                    for (index, dayMealItem) in dinnerPlan.dayMeals.enumerated() {
-                        print("  📋 Meal \(index): day='\(dayMealItem.day)', dayIndex=\(dayMealItem.dayIndex), matches=\(dayMealItem.dayIndex == expectedDayIndex)")
-                    }
+                    // Looking for dinner meal with expected day index
                     dayMeal = dinnerPlan.dayMeals.first { dayMealItem in
                         dayMealItem.dayIndex == expectedDayIndex
                     }
                     dinnerPlanId = dinnerMealPlan?.id
-                    print("🔍 DEBUG: Found dinner meal: \(dayMeal?.meal.name ?? "nil")")
+                    // Found dinner meal
                 }
                 
                 // Process breakfast meal
                 var breakfastMeal: DayMeal? = nil
                 var breakfastPlanId: UUID? = nil
                 if let breakfastPlan = fullBreakfastMealPlan {
-                    print("🔍 DEBUG: Looking for breakfast meal with expectedDayIndex: \(expectedDayIndex)")
+                    // Looking for breakfast meal
                     breakfastMeal = breakfastPlan.dayMeals.first { dayMeal in
                         dayMeal.dayIndex == expectedDayIndex
                     }
                     breakfastPlanId = breakfastMealPlan?.id
-                    print("🔍 DEBUG: Found breakfast meal: \(breakfastMeal?.meal.name ?? "nil")")
+                    // Found breakfast meal
                 }
                 
                 // Process lunch meal
                 var lunchMeal: DayMeal? = nil
                 var lunchPlanId: UUID? = nil
                 if let lunchPlan = fullLunchMealPlan {
-                    print("🔍 DEBUG: Looking for lunch meal with expectedDayIndex: \(expectedDayIndex)")
+                    // Looking for lunch meal
                     lunchMeal = lunchPlan.dayMeals.first { dayMeal in
                         dayMeal.dayIndex == expectedDayIndex
                     }
                     lunchPlanId = lunchMealPlan?.id
-                    print("🔍 DEBUG: Found lunch meal: \(lunchMeal?.meal.name ?? "nil")")
+                    // Found lunch meal
                 }
                 
                 await MainActor.run {
@@ -1388,26 +1826,20 @@ struct MainTabView: View {
     
     /// Finds a breakfast meal plan for a specific week
     private func findBreakfastMealPlanForWeek(_ mealPlans: [DatabaseMealPlan], weekOf date: Date) -> DatabaseMealPlan? {
-        print("🔍 DEBUG findBreakfastMealPlanForWeek: Looking for breakfast meal plan for week of \(date)")
-        print("🔍 DEBUG: Today's date: \(date)")
-        print("🔍 DEBUG: Today's week interval: \(getWeekInterval(for: date))")
+        // Looking for breakfast meal plan for week
         
         let result = mealPlans.first { plan in
             // Check if this meal plan was created during the specified week AND is a breakfast meal plan
             let createdDuringWeek = mealPlanCreatedDuringWeek(plan, weekOf: date)
             let isBreakfast = plan.mealPlanType == "breakfast"
             
-            print("  📋 Checking plan: \(plan.name) (ID: \(plan.id?.uuidString ?? "nil"))")
-            print("    - Type: '\(plan.mealPlanType)' (isBreakfast: \(isBreakfast))")
-            print("    - Week: \(plan.weekStartDate)")
-            print("    - IsActive: \(plan.isActive)")
-            print("    - CreatedDuringWeek: \(createdDuringWeek)")
+            // Checking meal plan
             print("    - Match: \(createdDuringWeek && isBreakfast)")
             
             return createdDuringWeek && isBreakfast
         }
         
-        print("🔍 DEBUG: findBreakfastMealPlanForWeek result: \(result?.name ?? "nil")")
+        // Found breakfast meal plan result
         return result
     }
     
@@ -1449,11 +1881,7 @@ struct MainTabView: View {
     
     /// Checks if a meal plan was created during a specific week
     private func mealPlanCreatedDuringWeek(_ mealPlan: DatabaseMealPlan, weekOf date: Date) -> Bool {
-        print("🔍 DEBUG mealPlanCreatedDuringWeek: Checking meal plan \(mealPlan.name)")
-        print("  - Target date: \(date)")
-        print("  - Target week interval: \(getWeekInterval(for: date))")
-        print("  - Meal plan week_start_date: '\(mealPlan.weekStartDate)'")
-        print("  - Meal plan created_at: \(mealPlan.createdAt ?? "nil")")
+        // Checking if meal plan was created during target week
         print("  - Meal plan is_active: \(mealPlan.isActive)")
         
         // IMPORTANT: We should match by week_start_date, not creation timestamp!
@@ -1526,7 +1954,7 @@ struct MainTabView: View {
     
     private func checkByCreationTimestamp(_ mealPlan: DatabaseMealPlan, weekOf date: Date) -> Bool {
         guard let createdAtString = mealPlan.createdAt else {
-            print("🔍 No createdAt found for meal plan \(mealPlan.id?.uuidString ?? "nil")")
+            // No createdAt found for meal plan
             return false
         }
         
@@ -1558,13 +1986,13 @@ struct MainTabView: View {
         }
         
         guard let finalCreatedAt = createdAt else {
-            print("🔍 Failed to parse createdAt '\(createdAtString)' for meal plan \(mealPlan.id?.uuidString ?? "nil")")
+            // Failed to parse createdAt for meal plan
             return false
         }
         
         let weekInterval = getWeekInterval(for: date)
         let isInWeek = finalCreatedAt >= weekInterval.start && finalCreatedAt <= weekInterval.end
-        print("🔍 Checking meal plan \(mealPlan.id?.uuidString ?? "nil"): createdAt=\(finalCreatedAt), weekStart=\(weekInterval.start), weekEnd=\(weekInterval.end), isInWeek=\(isInWeek)")
+        // Checking meal plan timing
         return isInWeek
     }
     
@@ -1575,7 +2003,28 @@ struct MainTabView: View {
         }
     }
     
-
+    // MARK: - Meal Analysis
+    private func analyzeMealImage(_ image: UIImage) {
+        isAnalyzingMeal = true
+        
+        Task {
+            do {
+                let result = try await OpenAIService.shared.analyzeMealImage(image)
+                
+                await MainActor.run {
+                    self.mealAnalysisResult = result
+                    self.isAnalyzingMeal = false
+                    self.showingMealAnalysis = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.isAnalyzingMeal = false
+                    print("❌ Error analyzing meal: \(error)")
+                }
+            }
+        }
+    }
+    
 }
 
 // MARK: - Meal Detail View
@@ -2068,6 +2517,7 @@ struct MealDetailView: View {
             }
         }
     }
+    
 }
 
 // MARK: - Settings View
@@ -2311,7 +2761,7 @@ struct NutritionPillCard: View {
     }
 }
 
-struct MacroCard: View {
+struct MainAppMacroCard: View {
     let value: String
     let label: String
     let icon: String
@@ -2507,6 +2957,7 @@ struct MealCompletionButton: View {
     let date: Date
     let mealType: String
     let currentCompletion: MealCompletionType?
+    let onMealReplacement: (String) -> Void
     
     @ObservedObject var streakService: StreakService
     @State private var showingCompletionSheet = false
@@ -2525,7 +2976,8 @@ struct MealCompletionButton: View {
                 date: date,
                 mealType: mealType,
                 currentCompletion: currentCompletion ?? .none,
-                streakService: streakService
+                streakService: streakService,
+                onMealReplacement: onMealReplacement
             )
         }
     }
@@ -2536,16 +2988,18 @@ struct MealCompletionSheet: View {
     let date: Date
     let mealType: String
     let currentCompletion: MealCompletionType
+    let onMealReplacement: (String) -> Void
     
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var streakService: StreakService
     @State private var localCompletion: MealCompletionType
     @State private var isUpdating = false
     
-    init(date: Date, mealType: String, currentCompletion: MealCompletionType, streakService: StreakService) {
+    init(date: Date, mealType: String, currentCompletion: MealCompletionType, streakService: StreakService, onMealReplacement: @escaping (String) -> Void) {
         self.date = date
         self.mealType = mealType
         self.currentCompletion = currentCompletion
+        self.onMealReplacement = onMealReplacement
         self.streakService = streakService
         self._localCompletion = State(initialValue: currentCompletion)
     }
@@ -2645,7 +3099,9 @@ struct MealCompletionSheet: View {
     
     private var similarMealButton: some View {
         Button(action: {
-            updateCompletion(.ateSimilar)
+            // Call the replacement callback and dismiss
+            onMealReplacement(mealType.lowercased())
+            dismiss()
         }) {
             HStack(spacing: 12) {
                 Image(systemName: localCompletion == .ateSimilar ? "checkmark.circle.fill" : "checkmark.circle")
@@ -2653,12 +3109,12 @@ struct MealCompletionSheet: View {
                     .foregroundColor(localCompletion == .ateSimilar ? .blue : .gray)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("🟡 I ate something similar")
+                    Text("📷 I ate something else")
                         .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                     
-                    Text("Similar to what was planned")
+                    Text("Log a different meal with camera")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -2902,6 +3358,242 @@ struct StreakDetailsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Swipeable Nutrition Card Component
+struct SwipeableNutritionCard: View {
+    let totalCaloriesForSelectedDay: Int
+    let remainingCaloriesForSelectedDay: Int
+    let caloriesProgress: Double
+    let progressRingColor: Color
+    let userData: UserOnboardingData
+    
+    @State private var currentPage = 0
+    @State private var dragOffset: CGFloat = 0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                // Page 1: Calories
+                caloriesView
+                    .frame(width: geometry.size.width)
+                
+                // Page 2: Macros
+                macrosView
+                    .frame(width: geometry.size.width)
+            }
+            .offset(x: -CGFloat(currentPage) * geometry.size.width + dragOffset)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentPage)
+            .animation(.interactiveSpring(), value: dragOffset)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        dragOffset = value.translation.width
+                    }
+                    .onEnded { value in
+                        let threshold: CGFloat = 50
+                        let velocity = value.velocity.width
+                        
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            if value.translation.width > threshold || velocity > 500 {
+                                // Swipe right - go to previous page
+                                currentPage = max(0, currentPage - 1)
+                            } else if value.translation.width < -threshold || velocity < -500 {
+                                // Swipe left - go to next page
+                                currentPage = min(1, currentPage + 1)
+                            }
+                            dragOffset = 0
+                        }
+                    }
+            )
+        }
+        .frame(minHeight: 180)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+        .overlay(
+            // Page indicators
+            HStack(spacing: 8) {
+                ForEach(0..<2, id: \.self) { index in
+                    Circle()
+                        .fill(currentPage == index ? Color.primary : Color.primary.opacity(0.3))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.bottom, 8),
+            alignment: .bottom
+        )
+        .clipped()
+    }
+    
+    // MARK: - Calories View (Page 1)
+    private var caloriesView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("\(remainingCaloriesForSelectedDay)")
+                    .font(.system(size: 48, weight: .bold, design: .default))
+                    .foregroundColor(.primary)
+                
+                Text("Remaining calories")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                if totalCaloriesForSelectedDay - remainingCaloriesForSelectedDay > 0 {
+                    Text("Consumed: \(totalCaloriesForSelectedDay - remainingCaloriesForSelectedDay) cal")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                
+                Text("Goal: \(totalCaloriesForSelectedDay) cal")
+                    .font(.caption)
+                    .foregroundColor(Color.gray.opacity(0.6))
+            }
+            
+            Spacer()
+            
+            // Circular progress ring
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 8)
+                    .frame(width: 80, height: 80)
+                
+                Circle()
+                    .trim(from: 0, to: CGFloat(caloriesProgress))
+                    .stroke(
+                        progressRingColor,
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .frame(width: 80, height: 80)
+                    .rotationEffect(.degrees(-90))
+                
+                VStack(spacing: 2) {
+                    Image(systemName: "flame.fill")
+                        .font(.title2)
+                        .foregroundColor(progressRingColor)
+                    
+                    Text("\(Int(caloriesProgress * 100))%")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(progressRingColor)
+                }
+            }
+        }
+        .padding(20)
+    }
+    
+    // MARK: - Macros View (Page 2)
+    private var macrosView: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Daily Macros")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Image(systemName: "chart.pie.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+            }
+            
+            HStack(spacing: 12) {
+                // Carbs
+                CompactMacroCard(
+                    value: "\(dailyCarbs)g",
+                    label: "Carbs",
+                    icon: "🌾",
+                    color: .orange
+                )
+                
+                // Protein
+                CompactMacroCard(
+                    value: "\(dailyProtein)g",
+                    label: "Protein",
+                    icon: "🥩",
+                    color: .red
+                )
+                
+                // Fats
+                CompactMacroCard(
+                    value: "\(dailyFats)g",
+                    label: "Fats",
+                    icon: "🥑",
+                    color: .yellow
+                )
+            }
+        }
+        .padding(20)
+    }
+    
+    // MARK: - Computed Properties for Macros (defensive)
+    private var dailyCarbs: Int {
+        guard let plan = userData.nutritionPlan else {
+            let calories = max(totalCaloriesForSelectedDay, 1200)
+            // 40% carbs, 4 cal/g - with extra safety checks
+            guard calories > 0 else { return 120 } // Fallback: 120g carbs
+            let carbCalories = Double(calories) * 0.4
+            let carbGrams = carbCalories / 4.0
+            return max(Int(carbGrams), 50) // Minimum 50g carbs
+        }
+        return max(plan.dailyCarbs, 50)
+    }
+    
+    private var dailyProtein: Int {
+        guard let plan = userData.nutritionPlan else {
+            let calories = max(totalCaloriesForSelectedDay, 1200)
+            // 30% protein, 4 cal/g - with extra safety checks
+            guard calories > 0 else { return 90 } // Fallback: 90g protein
+            let proteinCalories = Double(calories) * 0.3
+            let proteinGrams = proteinCalories / 4.0
+            return max(Int(proteinGrams), 50) // Minimum 50g protein
+        }
+        return max(plan.dailyProtein, 50)
+    }
+    
+    private var dailyFats: Int {
+        guard let plan = userData.nutritionPlan else {
+            let calories = max(totalCaloriesForSelectedDay, 1200)
+            // 30% fats, 9 cal/g - with extra safety checks
+            guard calories > 0 else { return 40 } // Fallback: 40g fats
+            let fatCalories = Double(calories) * 0.3
+            let fatGrams = fatCalories / 9.0
+            return max(Int(fatGrams), 25) // Minimum 25g fats
+        }
+        return max(plan.dailyFats, 25)
+    }
+}
+
+// MARK: - Compact Macro Card for Swipeable Card
+struct CompactMacroCard: View {
+    let value: String
+    let label: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(icon)
+                .font(.title2)
+            
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+            
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(color.opacity(0.1))
+        )
     }
 }
 

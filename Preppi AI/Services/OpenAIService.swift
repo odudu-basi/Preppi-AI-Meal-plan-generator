@@ -1,4 +1,5 @@
  import Foundation
+import UIKit
 
 class OpenAIService: ObservableObject {
     static let shared = OpenAIService()
@@ -39,6 +40,222 @@ class OpenAIService: ObservableObject {
             print("❌ Error getting current user: \(error)")
             return nil
         }
+    }
+
+    // MARK: - Nutrition Plan Generation
+
+    func generateNutritionPlan(userData: UserOnboardingData, progress: @escaping (Double) -> Void) async throws -> NutritionPlan {
+        await MainActor.run {
+            isGenerating = true
+            errorMessage = nil
+        }
+
+        defer {
+            Task { @MainActor in
+                isGenerating = false
+            }
+        }
+
+        // Progress updates
+        await MainActor.run { progress(0.1) }
+
+        let prompt = createNutritionPlanPrompt(from: userData)
+        await MainActor.run { progress(0.3) }
+
+        let response = try await makeNutritionPlanAPICall(prompt: prompt)
+        await MainActor.run { progress(0.8) }
+
+        let plan = try parseNutritionPlan(from: response, userData: userData)
+        await MainActor.run { progress(1.0) }
+
+        return plan
+    }
+
+    private func createNutritionPlanPrompt(from userData: UserOnboardingData) -> String {
+        var prompt = """
+        You are a professional nutritionist and health coach. Create a personalized nutrition plan for a 3-month period based on this user's data:
+
+        Personal Information:
+        - Name: \(userData.name)
+        - Sex: \(userData.sex?.rawValue ?? "Not specified")
+        - Age: \(userData.age) years
+        - Current Weight: \(userData.weight) kg
+        - Height: \(userData.height) cm
+        - Activity Level: \(userData.activityLevel.rawValue)
+        """
+
+        // Add health goals
+        if !userData.healthGoals.isEmpty {
+            let goals = userData.healthGoals.map { $0.rawValue }.joined(separator: ", ")
+            prompt += "\n- Health Goals: \(goals)"
+        }
+
+        // Determine goal type and add target weight info
+        let isWeightLoss = userData.healthGoals.contains(.loseWeight)
+        let isWeightGain = userData.healthGoals.contains(.gainWeight)
+        let isMaintenance = userData.healthGoals.contains(.maintainWeight)
+
+        if let targetWeight = userData.targetWeight, let speed = userData.weightLossSpeed {
+            prompt += "\n- Target Weight: \(targetWeight) kg"
+            prompt += "\n- Current to Target Difference: \(abs(targetWeight - userData.weight)) kg"
+            prompt += "\n- Pace: \(speed.rawValue)"
+            prompt += "\n- Weekly Goal: \(speed.weeklyWeightLossKg) kg per week"
+
+            if isWeightLoss {
+                prompt += "\n- Goal Type: WEIGHT LOSS"
+            } else if isWeightGain {
+                prompt += "\n- Goal Type: WEIGHT GAIN"
+            }
+        } else if isMaintenance {
+            prompt += "\n- Goal Type: MAINTAIN WEIGHT"
+        } else {
+            prompt += "\n- Goal Type: IMPROVE OVERALL HEALTH"
+        }
+
+        // Add dietary restrictions and allergies
+        if !userData.dietaryRestrictions.isEmpty {
+            let restrictions = userData.dietaryRestrictions.map { $0.rawValue }.joined(separator: ", ")
+            prompt += "\n- Dietary Restrictions: \(restrictions)"
+        }
+
+        if !userData.foodAllergies.isEmpty {
+            let allergies = userData.foodAllergies.map { $0.rawValue }.joined(separator: ", ")
+            prompt += "\n- Food Allergies: \(allergies)"
+        }
+
+        prompt += """
+
+
+        Calculate and provide:
+        1. Daily calorie target (must be realistic and safe)
+        2. Daily macronutrient breakdown in grams:
+           - Carbohydrates (g)
+           - Protein (g)
+           - Fats (g)
+        3. Predicted weight after exactly 3 months
+        4. Health score (1-10) with brief reasoning
+
+        IMPORTANT GUIDELINES:
+        - For weight loss: Create a safe caloric deficit (typically 500-750 calories below maintenance)
+        - For weight gain: Create a controlled surplus (typically 300-500 calories above maintenance)
+        - For maintenance/health: Calculate maintenance calories
+        - Ensure protein intake supports muscle preservation (1.6-2.2g per kg body weight)
+        - Balance macros appropriately for the user's activity level
+        - Make realistic 3-month weight predictions (0.5-1 kg per week for loss, 0.25-0.5 kg per week for gain)
+        - CRITICAL: Adjust macronutrient ratios based on dietary restrictions:
+          * Vegetarian/Vegan: Ensure adequate protein from plant sources, may need higher protein percentage
+          * Keto/Low Carb: Dramatically reduce carbs (20-50g), increase fats (60-75% of calories)
+          * Paleo: Focus on whole foods, moderate carbs from vegetables/fruits
+          * Low Fat: Reduce fat to 20-25% of calories, increase carbs and protein
+          * High Protein: Increase protein to 30-35% of calories
+          * Gluten-Free/Dairy-Free: No specific macro changes, just note restriction
+        - Account for food allergies by avoiding restricted food groups in calculations
+        - Ensure the plan is nutritionally complete despite restrictions
+
+        Respond ONLY with valid JSON (no markdown, no extra text):
+        {
+          "dailyCalories": 1950,
+          "dailyCarbs": 195,
+          "dailyProtein": 146,
+          "dailyFats": 65,
+          "predictedWeightAfter3Months": 72.5,
+          "healthScore": 8,
+          "healthScoreReasoning": "Strong plan with balanced macros and realistic goals"
+        }
+        """
+
+        return prompt
+    }
+
+    private func makeNutritionPlanAPICall(prompt: String) async throws -> String {
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o",
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You are a certified nutritionist. Always respond with valid JSON only, no markdown formatting or additional text."
+                ],
+                [
+                    "role": "user",
+                    "content": prompt
+                ]
+            ],
+            "temperature": 0.7,
+            "max_tokens": 600
+        ]
+
+        guard let url = URL(string: baseURL) else {
+            throw OpenAIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+
+        do {
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            let content = openAIResponse.choices.first?.message.content ?? ""
+            return content
+        } catch {
+            throw OpenAIError.parsingError
+        }
+    }
+
+    private func parseNutritionPlan(from jsonString: String, userData: UserOnboardingData) throws -> NutritionPlan {
+        // Clean JSON string (remove markdown if present)
+        let cleanedJSON = jsonString
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let data = cleanedJSON.data(using: .utf8) else {
+            throw OpenAIError.parsingError
+        }
+
+        let decoder = JSONDecoder()
+        let response = try decoder.decode(NutritionPlanResponse.self, from: data)
+
+        // Calculate actual weight change
+        let currentWeight = userData.weight
+        let predictedWeight = response.predictedWeightAfter3Months
+        let weightChange = predictedWeight - currentWeight
+
+        return NutritionPlan(
+            dailyCalories: response.dailyCalories,
+            dailyCarbs: response.dailyCarbs,
+            dailyProtein: response.dailyProtein,
+            dailyFats: response.dailyFats,
+            predictedWeightAfter3Months: response.predictedWeightAfter3Months,
+            weightChange: weightChange,
+            healthScore: response.healthScore,
+            healthScoreReasoning: response.healthScoreReasoning,
+            createdDate: Date()
+        )
     }
     
     func generateMealPlan(for userData: UserOnboardingData, cuisines: [String] = [], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3, weekIdentifier: String? = nil) async throws -> [DayMeal] {
@@ -742,6 +959,167 @@ class OpenAIService: ObservableObject {
         Style: Hyperrealistic food photography, magazine-quality, commercial food advertising style, natural and appetizing.
         """
     }
+    
+    // MARK: - Meal Image Analysis
+    
+    /// Analyzes a meal image and returns nutritional information
+    func analyzeMealImage(_ image: UIImage) async throws -> MealAnalysisResult {
+        await MainActor.run {
+            isGenerating = true
+            errorMessage = nil
+        }
+        
+        defer {
+            Task { @MainActor in
+                isGenerating = false
+            }
+        }
+        
+        // Convert image to base64
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw OpenAIError.invalidRequest
+        }
+        let base64Image = imageData.base64EncodedString()
+        
+        let prompt = createMealAnalysisPrompt()
+        
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o",
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You are a professional nutritionist and food analyst. Analyze food images and provide accurate nutritional information. Always respond with valid JSON format."
+                ],
+                [
+                    "role": "user",
+                    "content": [
+                        [
+                            "type": "text",
+                            "text": prompt
+                        ],
+                        [
+                            "type": "image_url",
+                            "image_url": [
+                                "url": "data:image/jpeg;base64,\(base64Image)"
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "max_tokens": 1000,
+            "temperature": 0.3
+        ]
+        
+        guard let url = URL(string: baseURL) else {
+            throw OpenAIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+        
+        do {
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            let content = openAIResponse.choices.first?.message.content ?? ""
+            
+            // Clean the content to extract JSON
+            let cleanedContent = content
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Parse the JSON response
+            guard let contentData = cleanedContent.data(using: .utf8) else {
+                print("❌ Failed to convert content to data: \(content)")
+                throw OpenAIError.parsingError
+            }
+            
+            let analysisResponse = try JSONDecoder().decode(MealAnalysisResponse.self, from: contentData)
+            
+            let macros = Macros(
+                protein: analysisResponse.macros.protein,
+                carbohydrates: analysisResponse.macros.carbohydrates,
+                fat: analysisResponse.macros.fat,
+                fiber: analysisResponse.macros.fiber,
+                sugar: analysisResponse.macros.sugar,
+                sodium: analysisResponse.macros.sodium
+            )
+            
+            return MealAnalysisResult(
+                mealName: analysisResponse.mealName,
+                description: analysisResponse.description,
+                macros: macros,
+                calories: analysisResponse.calories,
+                healthScore: analysisResponse.healthScore
+            )
+            
+        } catch {
+            print("❌ Failed to parse meal analysis response: \(error)")
+            throw OpenAIError.parsingError
+        }
+    }
+    
+    private func createMealAnalysisPrompt() -> String {
+        return """
+        Analyze this food image and provide detailed nutritional information. Look carefully at the food items, portion sizes, and ingredients visible in the image.
+        
+        Please identify:
+        1. The name of the meal/dish (be descriptive and appetizing)
+        1b. A vivid but accurate one-sentence description of what is in the image (ingredients, style, cooking method)
+        2. Estimated calories for the entire portion shown
+        3. Detailed macronutrient breakdown in grams
+        4. Health score from 1-10 based on nutritional balance, ingredient quality, and overall healthiness
+        
+        Guidelines for analysis:
+        - Be as accurate as possible with portion size estimation
+        - Consider all visible ingredients and components
+        - Account for cooking methods (fried, grilled, etc.) that affect calories
+        - Include hidden ingredients like oils, dressings, and seasonings
+        - Provide realistic macro values based on standard nutritional data
+        - Health score should consider: nutrient density, balance of macros, processing level, vegetable content
+        
+        Respond ONLY with valid JSON in this exact format:
+        {
+          "mealName": "Descriptive name of the meal",
+          "description": "Accurate one-sentence description of what is in the meal image",
+          "calories": 650,
+          "macros": {
+            "protein": 45.5,
+            "carbohydrates": 55.2,
+            "fat": 18.7,
+            "fiber": 8.3,
+            "sugar": 12.1,
+            "sodium": 890.5
+          },
+          "healthScore": 8
+        }
+        """
+    }
 }
 
 // MARK: - Data Models
@@ -770,6 +1148,57 @@ struct ImageGenerationResponse: Codable {
 
 struct ImageData: Codable {
     let url: String
+}
+
+// MARK: - Nutrition Plan Models
+
+struct NutritionPlan: Codable, Equatable {
+    let dailyCalories: Int
+    let dailyCarbs: Int
+    let dailyProtein: Int
+    let dailyFats: Int
+    let predictedWeightAfter3Months: Double
+    let weightChange: Double
+    let healthScore: Int
+    let healthScoreReasoning: String
+    let createdDate: Date
+
+    static func == (lhs: NutritionPlan, rhs: NutritionPlan) -> Bool {
+        return lhs.dailyCalories == rhs.dailyCalories &&
+               lhs.dailyCarbs == rhs.dailyCarbs &&
+               lhs.dailyProtein == rhs.dailyProtein &&
+               lhs.dailyFats == rhs.dailyFats &&
+               lhs.predictedWeightAfter3Months == rhs.predictedWeightAfter3Months
+    }
+}
+
+struct NutritionPlanResponse: Codable {
+    let dailyCalories: Int
+    let dailyCarbs: Int
+    let dailyProtein: Int
+    let dailyFats: Int
+    let predictedWeightAfter3Months: Double
+    let healthScore: Int
+    let healthScoreReasoning: String
+}
+
+// MARK: - Meal Analysis Models
+
+struct MealAnalysisResponse: Codable {
+    let mealName: String
+    let description: String
+    let calories: Int
+    let macros: MacrosResponse
+    let healthScore: Int
+}
+
+struct MacrosResponse: Codable {
+    let protein: Double
+    let carbohydrates: Double
+    let fat: Double
+    let fiber: Double
+    let sugar: Double
+    let sodium: Double
 }
 
 // MARK: - Error Handling

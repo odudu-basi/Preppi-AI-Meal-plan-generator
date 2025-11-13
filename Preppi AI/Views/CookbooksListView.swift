@@ -690,6 +690,7 @@ struct SavedRecipeDetailView: View {
                         RecipeImageView(imageUrl: imageUrl) {
                             showingImageFullscreen = true
                         }
+                        .padding(.horizontal, 16)
                     } else {
                         // Placeholder image
                         RoundedRectangle(cornerRadius: 16)
@@ -705,6 +706,7 @@ struct SavedRecipeDetailView: View {
                                         .foregroundColor(.secondary)
                                 }
                             )
+                            .padding(.horizontal, 16)
                     }
                     
                     // Recipe Header
@@ -720,7 +722,7 @@ struct SavedRecipeDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     
                     // Time and Servings Info
                     HStack(spacing: 24) {
@@ -766,15 +768,15 @@ struct SavedRecipeDetailView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color(.systemGray6).opacity(0.5))
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     
                     // Difficulty Rating
                     DifficultyRatingCard(difficulty: recipe.difficultyRating)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 24)
                     
                     // Nutrition Information
                     NutritionCard(nutrition: recipe.nutrition, servings: recipe.servings)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 24)
                     
                     // Ingredients
                     VStack(alignment: .leading, spacing: 16) {
@@ -809,7 +811,7 @@ struct SavedRecipeDetailView: View {
                             .fill(Color(.systemBackground))
                             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     
                     // Instructions
                     VStack(alignment: .leading, spacing: 16) {
@@ -845,7 +847,7 @@ struct SavedRecipeDetailView: View {
                             .fill(Color(.systemBackground))
                             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     
                     // Shopping List
                     VStack(alignment: .leading, spacing: 16) {
@@ -877,7 +879,7 @@ struct SavedRecipeDetailView: View {
                             .fill(Color(.systemBackground))
                             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     
                     // Notes (if any)
                     if let notes = recipe.notes, !notes.isEmpty {
@@ -899,14 +901,16 @@ struct SavedRecipeDetailView: View {
                                 .fill(Color(.systemBackground))
                                 .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
                         )
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 24)
                     }
                     
                     // Bottom spacing
-                    Color.clear.frame(height: 40)
+                    Color.clear.frame(height: 20)
                 }
-                .padding(.top, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
             }
+            .clipped()
             .background(
                 LinearGradient(
                     colors: [

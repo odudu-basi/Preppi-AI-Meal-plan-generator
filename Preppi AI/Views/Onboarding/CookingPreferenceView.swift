@@ -17,7 +17,7 @@ struct CookingPreferenceView: View {
             VStack(spacing: 0) {
                 // Navigation bar with back button - Fixed at top
                 OnboardingNavigationBar(
-                    currentStep: 2,
+                    currentStep: coordinator.currentStep.stepNumber,
                     totalSteps: OnboardingStep.totalSteps,
                     canGoBack: true,
                     onBackTapped: {
@@ -181,7 +181,7 @@ struct PremiumCookingPreferenceCard: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
                 Spacer()

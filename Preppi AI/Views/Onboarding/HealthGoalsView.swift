@@ -15,8 +15,7 @@ struct HealthGoalsView: View {
     private let healthGoals: [HealthGoal] = [
         .loseWeight,
         .maintainWeight,
-        .gainWeight,
-        .improveHealth
+        .gainWeight
     ]
     
     var body: some View {
@@ -24,7 +23,7 @@ struct HealthGoalsView: View {
             VStack(spacing: 20) {
                 // Navigation bar with back button
                 OnboardingNavigationBar(
-                    currentStep: 6,
+                    currentStep: coordinator.currentStep.stepNumber,
                     totalSteps: OnboardingStep.totalSteps,
                     canGoBack: true,
                     onBackTapped: {
@@ -167,7 +166,7 @@ struct PremiumHealthGoalCard: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
                 Spacer()

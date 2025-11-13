@@ -40,9 +40,12 @@ struct AddToCookbookView: View {
                 if cookbookService.isLoading {
                     VStack {
                         Spacer()
-                        ProgressView("Loading cookbooks...")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        VStack(spacing: 8) {
+                            ProgressView()
+                            Text("Loading cookbooks...")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                         Spacer()
                     }
                 } else if cookbookService.cookbooks.isEmpty {

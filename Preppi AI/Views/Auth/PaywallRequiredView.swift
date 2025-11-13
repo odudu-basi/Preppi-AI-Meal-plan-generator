@@ -1,11 +1,10 @@
 import SwiftUI
 import RevenueCat
-import SuperwallKit
+import RevenueCatUI
 
 struct PaywallRequiredView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var revenueCatService = RevenueCatService.shared
-    @StateObject private var superwallService = SuperwallService.shared
     @State private var isCheckingEntitlements = true
     
     var body: some View {
@@ -21,8 +20,23 @@ struct PaywallRequiredView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color("AppBackground"))
+            } else if let offering = revenueCatService.currentOffering {
+                // Show RevenueCat paywall
+                PaywallView(offering: offering) { customerInfo in
+                    // Handle successful purchase
+                    print("✅ Purchase successful in PaywallRequiredView")
+                    handlePurchaseSuccess()
+                    return (userCancelled: false, error: nil)
+                }
+                .onRestoreCompleted { customerInfo in
+                    // Handle successful restore
+                    print("✅ Restore successful in PaywallRequiredView")
+                    if customerInfo.entitlements.active.isEmpty == false {
+                        handlePurchaseSuccess()
+                    }
+                }
             } else {
-                // Show Superwall paywall or fallback
+                // Fallback UI when no offering is available
                 VStack(spacing: 20) {
                     Text("Premium Required")
                         .font(.title2)
@@ -33,20 +47,16 @@ struct PaywallRequiredView: View {
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                     
-                    Button("View Plans") {
-                        presentSuperwall()
+                    Button("Retry Loading") {
+                        Task {
+                            await revenueCatService.fetchOfferings()
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color("AppBackground"))
-                .onAppear {
-                    // Auto-present Superwall when view appears
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        presentSuperwall()
-                    }
-                }
             }
         }
         .onAppear {
@@ -76,24 +86,15 @@ struct PaywallRequiredView: View {
                 return
             }
             
-            print("❌ User confirmed to not have Pro access - preparing Superwall paywall")
+            print("❌ User confirmed to not have Pro access - preparing RevenueCat paywall")
+            
+            // Get offerings for paywall
+            await revenueCatService.fetchOfferings()
             
             await MainActor.run {
                 isCheckingEntitlements = false
             }
         }
-    }
-    
-    private func presentSuperwall() {
-        print("🎯 Presenting Superwall paywall...")
-        
-        SuperwallService.shared.presentPaywall(
-            for: "campaign_trigger",
-            parameters: [
-                "source": "paywall_required",
-                "user_type": "existing"
-            ]
-        )
     }
     
     private func handlePurchaseSuccess() {

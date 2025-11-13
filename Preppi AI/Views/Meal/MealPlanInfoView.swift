@@ -481,6 +481,26 @@ struct CuisinePickerView: View {
     let onCuisineSelected: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     
+    @State private var showingOtherInput = false
+    @State private var otherCuisineText = ""
+    @State private var filteredSuggestions: [String] = []
+    
+    // Extended list of world cuisines for autocomplete
+    private let allWorldCuisines = [
+        "Afghan", "African", "Albanian", "Algerian", "American Classic", "Argentinian", "Armenian", "Australian",
+        "Austrian", "Bangladeshi", "Basque", "Belgian", "Brazilian", "British", "Bulgarian", "Burmese",
+        "Cajun", "Cambodian", "Canadian", "Caribbean", "Chilean", "Chinese", "Colombian", "Croatian",
+        "Cuban", "Czech", "Danish", "Dutch", "Eastern European", "Egyptian", "Ethiopian", "Filipino",
+        "Finnish", "French", "Georgian", "German", "Ghanaian", "Greek", "Guatemalan", "Hungarian",
+        "Icelandic", "Indian", "Indonesian", "Iranian", "Iraqi", "Irish", "Israeli", "Italian",
+        "Jamaican", "Japanese", "Jordanian", "Korean", "Laotian", "Lebanese", "Malaysian", "Mediterranean",
+        "Mexican", "Middle Eastern", "Mongolian", "Moroccan", "Nepalese", "Nigerian", "Norwegian",
+        "Pakistani", "Peruvian", "Polish", "Portuguese", "Romanian", "Russian", "Salvadoran", "Scottish",
+        "Senegalese", "Serbian", "Singaporean", "Slovak", "Slovenian", "Soul Food / Southern", "Spanish",
+        "Sri Lankan", "Swedish", "Swiss", "Syrian", "Taiwanese", "Thai", "Tibetan", "Turkish",
+        "Ukrainian", "Venezuelan", "Vietnamese", "Welsh", "Yemeni"
+    ]
+    
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -529,6 +549,43 @@ struct CuisinePickerView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
+                        
+                        // Other Option Button
+                        Button {
+                            showingOtherInput.toggle()
+                        } label: {
+                            HStack {
+                                Text("🌍")
+                                    .font(.title2)
+                                
+                                Text("Other")
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                Image(systemName: showingOtherInput ? "chevron.up" : "chevron.down")
+                                    .font(.title3)
+                                    .foregroundColor(.blue)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.blue.opacity(0.1))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // Other Cuisine Input Section
+                        if showingOtherInput {
+                            otherCuisineInputSection
+                        }
                     }
                     .padding(.horizontal, 20)
                 }
@@ -542,6 +599,106 @@ struct CuisinePickerView: View {
                     }
                     .foregroundColor(.blue)
                 }
+            }
+        }
+    }
+    
+    // MARK: - Other Cuisine Input Section
+    private var otherCuisineInputSection: some View {
+        VStack(spacing: 16) {
+            // Text Input
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Enter cuisine type:")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                TextField("Type cuisine name...", text: $otherCuisineText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .onChange(of: otherCuisineText) { newValue in
+                        updateFilteredSuggestions(for: newValue)
+                    }
+            }
+            
+            // Autocomplete Suggestions
+            if !filteredSuggestions.isEmpty && !otherCuisineText.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Suggestions:")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    
+                    LazyVStack(spacing: 6) {
+                        ForEach(filteredSuggestions.prefix(5), id: \.self) { suggestion in
+                            Button {
+                                onCuisineSelected(suggestion)
+                            } label: {
+                                HStack {
+                                    Text(getCuisineEmoji(suggestion))
+                                        .font(.subheadline)
+                                    
+                                    Text(suggestion)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(.systemGray6))
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                }
+            }
+            
+            // Add Custom Button
+            if !otherCuisineText.isEmpty && !filteredSuggestions.contains(otherCuisineText) {
+                Button {
+                    onCuisineSelected(otherCuisineText)
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add \"\(otherCuisineText)\"")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.green)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+        .animation(.easeInOut(duration: 0.3), value: showingOtherInput)
+    }
+    
+    private func updateFilteredSuggestions(for searchText: String) {
+        if searchText.isEmpty {
+            filteredSuggestions = []
+        } else {
+            filteredSuggestions = allWorldCuisines.filter { cuisine in
+                cuisine.localizedCaseInsensitiveContains(searchText) &&
+                !availableCuisines.contains(cuisine) // Don't suggest already available cuisines
             }
         }
     }

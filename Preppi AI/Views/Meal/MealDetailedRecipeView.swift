@@ -4,7 +4,8 @@ struct MealDetailedRecipeView: View {
     let dayMeal: DayMeal
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appState: AppState
-    
+    @State private var servings: Int = 1 // Default to 1 serving
+
     var body: some View {
         ZStack {
             // Background gradient
@@ -90,7 +91,10 @@ struct MealDetailedRecipeView: View {
                 .fontWeight(.bold)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.primary)
-            
+
+            // Servings and Calories Section
+            servingsAndCaloriesSection
+
             // Show image if available, otherwise show description
             if let imageUrl = dayMeal.meal.imageUrl, !imageUrl.isEmpty {
                 AsyncImage(url: URL(string: imageUrl)) { image in
@@ -127,6 +131,73 @@ struct MealDetailedRecipeView: View {
         )
     }
     
+    // MARK: - Servings and Calories Section
+    private var servingsAndCaloriesSection: some View {
+        HStack(spacing: 24) {
+            // Calories per serving
+            VStack(spacing: 4) {
+                Text("\(dayMeal.meal.calories)")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.orange)
+
+                Text("cal per serving")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.orange.opacity(0.1))
+            )
+
+            // Servings adjuster
+            VStack(spacing: 4) {
+                HStack(spacing: 16) {
+                    Button(action: {
+                        if servings > 1 {
+                            servings -= 1
+                        }
+                    }) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(servings > 1 ? .green : .gray)
+                    }
+                    .disabled(servings <= 1)
+
+                    Text("\(servings)")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                        .frame(minWidth: 30)
+
+                    Button(action: {
+                        if servings < 10 {
+                            servings += 1
+                        }
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(servings < 10 ? .green : .gray)
+                    }
+                    .disabled(servings >= 10)
+                }
+
+                Text("serving\(servings == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.green.opacity(0.1))
+            )
+        }
+        .padding(.vertical, 8)
+    }
+
     // MARK: - Detailed Ingredients Section
     private func detailedIngredientsSection(ingredients: [String]) -> some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -134,14 +205,14 @@ struct MealDetailedRecipeView: View {
                 Image(systemName: "cart.fill")
                     .font(.title3)
                     .foregroundColor(.blue)
-                
+
                 Text("Shopping List")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
-                
+
                 Spacer()
-                
+
                 Text("\(ingredients.count) items")
                     .font(.caption)
                     .fontWeight(.medium)
@@ -153,11 +224,11 @@ struct MealDetailedRecipeView: View {
                             .fill(Color.blue.opacity(0.1))
                     )
             }
-            
+
             VStack(spacing: 12) {
                 ForEach(Array(ingredients.enumerated()), id: \.offset) { index, ingredient in
                     IngredientRowView(
-                        ingredient: ingredient,
+                        ingredient: scaleIngredient(ingredient),
                         index: index + 1
                     )
                 }
@@ -169,6 +240,81 @@ struct MealDetailedRecipeView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.08), radius: 15, x: 0, y: 8)
         )
+    }
+
+    // MARK: - Helper Function to Scale Ingredients
+    private func scaleIngredient(_ ingredient: String) -> String {
+        // Parse the ingredient string to extract quantity and scale it
+        let components = ingredient.split(separator: " ", maxSplits: 2)
+
+        guard components.count >= 2 else {
+            // If we can't parse it, return original with servings note
+            return servings > 1 ? "\(ingredient) (×\(servings))" : ingredient
+        }
+
+        // Try to parse the first component as a number or fraction
+        let quantityString = String(components[0])
+        let restOfIngredient = components.dropFirst().joined(separator: " ")
+
+        if let quantity = parseQuantity(quantityString) {
+            let scaledQuantity = quantity * Double(servings)
+            let formattedQuantity = formatQuantity(scaledQuantity)
+            return "\(formattedQuantity) \(restOfIngredient)"
+        } else {
+            // If not a number, return original with servings note
+            return servings > 1 ? "\(ingredient) (×\(servings))" : ingredient
+        }
+    }
+
+    // Parse quantity from string (handles decimals and fractions like "1/2", "2.5", etc.)
+    private func parseQuantity(_ string: String) -> Double? {
+        // Handle fractions like "1/2", "1/4", etc.
+        if string.contains("/") {
+            let parts = string.split(separator: "/")
+            guard parts.count == 2,
+                  let numerator = Double(parts[0]),
+                  let denominator = Double(parts[1]),
+                  denominator != 0 else {
+                return nil
+            }
+            return numerator / denominator
+        }
+
+        // Handle regular numbers
+        return Double(string)
+    }
+
+    // Format quantity to display nicely (handle fractions and decimals)
+    private func formatQuantity(_ quantity: Double) -> String {
+        // Check if it's a whole number
+        if quantity.truncatingRemainder(dividingBy: 1) == 0 {
+            return String(Int(quantity))
+        }
+
+        // Check for common fractions
+        let fractions: [(Double, String)] = [
+            (0.25, "¼"),
+            (0.33, "⅓"),
+            (0.5, "½"),
+            (0.66, "⅔"),
+            (0.75, "¾")
+        ]
+
+        let intPart = Int(quantity)
+        let fracPart = quantity - Double(intPart)
+
+        for (value, symbol) in fractions {
+            if abs(fracPart - value) < 0.05 {
+                if intPart > 0 {
+                    return "\(intPart)\(symbol)"
+                } else {
+                    return symbol
+                }
+            }
+        }
+
+        // Default to decimal format
+        return String(format: "%.1f", quantity)
     }
     
     // MARK: - Cooking Instructions Section
