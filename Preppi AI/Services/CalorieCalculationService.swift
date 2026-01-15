@@ -33,27 +33,37 @@ class CalorieCalculationService {
     
     private func calculateTDEE(for userData: UserOnboardingData) -> Double {
         // First calculate BMR (Basal Metabolic Rate) using Mifflin-St Jeor Equation
-        // Since we don't have gender data, we'll use a neutral approach or estimate
-        let bmr = calculateBMR(age: userData.age, weight: userData.weight, height: userData.height)
-        
+        let bmr = calculateBMR(age: userData.age, weight: userData.weight, height: userData.height, sex: userData.sex)
+
         // Apply activity level multiplier
         let activityMultiplier = getActivityMultiplier(for: userData.activityLevel)
-        
+
         return bmr * activityMultiplier
     }
-    
-    private func calculateBMR(age: Int, weight: Double, height: Int) -> Double {
-        // Using a gender-neutral approach based on average of male/female formulas
-        // Mifflin-St Jeor: 
+
+    func calculateBMR(age: Int, weight: Double, height: Int, sex: Sex? = nil) -> Double {
+        // Mifflin-St Jeor Equation
         // Male: BMR = 10 × weight(kg) + 6.25 × height(cm) - 5 × age(years) + 5
         // Female: BMR = 10 × weight(kg) + 6.25 × height(cm) - 5 × age(years) - 161
-        // Average: BMR = 10 × weight(kg) + 6.25 × height(cm) - 5 × age(years) - 78
-        
+
         let weightInKg = weight * 0.453592 // Convert pounds to kg
         let heightInCm = Double(height) * 2.54 // Convert inches to cm
-        
-        let bmr = 10 * weightInKg + 6.25 * heightInCm - 5 * Double(age) - 78
-        
+
+        let baseBMR = 10 * weightInKg + 6.25 * heightInCm - 5 * Double(age)
+
+        let bmr: Double
+        if let sex = sex {
+            switch sex {
+            case .male:
+                bmr = baseBMR + 5
+            case .female:
+                bmr = baseBMR - 161
+            }
+        } else {
+            // If gender not provided, use average
+            bmr = baseBMR - 78
+        }
+
         // Ensure minimum BMR
         return max(bmr, 1200)
     }
@@ -141,6 +151,21 @@ class CalorieCalculationService {
         return .maintainWeight
     }
     
+    /// Calculate daily micronutrient goals based on user data and nutrition plan
+    func calculateDailyMicronutrientGoals(for userData: UserOnboardingData) -> (fiber: Double, sugar: Double, sodium: Double) {
+        // If user has a nutrition plan, use those micronutrient values
+        if let nutritionPlan = userData.nutritionPlan {
+            // Calculate macros from the nutrition plan
+            let macros = calculateMacros(for: nutritionPlan.dailyCalories, userData: userData)
+            return (fiber: macros.fiber, sugar: macros.sugar, sodium: macros.sodium)
+        }
+
+        // Fallback calculation for users without a nutrition plan
+        let dailyCalories = calculateDailyCalorieGoal(for: userData)
+        let macros = calculateMacros(for: dailyCalories, userData: userData)
+        return (fiber: macros.fiber, sugar: macros.sugar, sodium: macros.sodium)
+    }
+
     /// Calculate personalized calorie range for a specific meal type based on user's profile and goals
     func calculateMealCalorieRange(for userData: UserOnboardingData, mealType: String) -> String {
         let totalDailyCalories = Double(calculateDailyCalorieGoal(for: userData))

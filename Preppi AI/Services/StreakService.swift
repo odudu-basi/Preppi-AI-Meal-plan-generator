@@ -48,6 +48,17 @@ class StreakService: ObservableObject {
     
     // MARK: - Public Methods
     
+    /// Get meal completions for a specific date
+    func getMealCompletionsForDate(_ date: Date) -> [MealInstance] {
+        let normalizedDate = normalizeDate(date)
+        return weekCompletions[normalizedDate] ?? []
+    }
+    
+    /// Get completed meals for a specific date (only meals with completion != .none)
+    func getCompletedMealsForDate(_ date: Date) -> [MealInstance] {
+        return getMealCompletionsForDate(date).filter { $0.completion != .none }
+    }
+    
     /// Mark a meal as completed for a specific date
     func markMeal(date: Date, mealType: String, as completion: MealCompletionType) async throws {
         guard let userId = authService.currentUser?.id else {
@@ -117,6 +128,9 @@ class StreakService: ObservableObject {
             
             // Verify the data was actually saved to the database
             await verifyDatabaseSave(date: date, mealType: mealType, completion: completion)
+            
+            // Post notification to refresh UI
+            NotificationCenter.default.post(name: NSNotification.Name("MealCompletionUpdated"), object: nil)
             
         } catch {
             print("❌ Error marking meal completion: \(error)")

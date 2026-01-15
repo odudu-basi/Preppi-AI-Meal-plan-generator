@@ -4,113 +4,375 @@ struct LoggedMealDetailView: View {
     let loggedMeal: LoggedMeal
     @Environment(\.dismiss) private var dismiss
     @StateObject private var loggedMealService = LoggedMealService.shared
-    
+
     @State private var showingDeleteAlert = false
     @State private var animateContent = false
-    
+    @State private var animateImage = false
+    @State private var showingShareSheet = false
+
     var body: some View {
-        ZStack {
-            // Background gradient matching app theme
-            LinearGradient(
-                colors: [
-                    Color("AppBackground"),
-                    Color(.systemGray6).opacity(0.3)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Hero Image Section
-                    heroImageSection
-                        .opacity(animateContent ? 1.0 : 0.0)
-                        .offset(y: animateContent ? 0 : -30)
-
-                    // Content Card
-                    VStack(spacing: 24) {
-                        // Header with meal name and time
-                        headerSection
-                            .opacity(animateContent ? 1.0 : 0.0)
-                            .offset(y: animateContent ? 0 : 20)
-
-                        // Description
-                        if !loggedMeal.description.isEmpty {
-                            descriptionSection
-                                .opacity(animateContent ? 1.0 : 0.0)
-                                .offset(y: animateContent ? 0 : 20)
-                        }
-
-                        // Stats Grid
-                        statsGrid
-                            .opacity(animateContent ? 1.0 : 0.0)
-                            .offset(y: animateContent ? 0 : 20)
-
-                        // Preppi Score Section
-                        preppiScoreSection
-                            .opacity(animateContent ? 1.0 : 0.0)
-                            .offset(y: animateContent ? 0 : 20)
-
-                        // Delete button
-                        deleteButton
-                            .opacity(animateContent ? 1.0 : 0.0)
-                            .offset(y: animateContent ? 0 : 20)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, -30)
-                    .padding(.bottom, 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: 30)
-                            .fill(Color("AppBackground"))
-                            .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: -10)
-                    )
-                }
-                .padding(.horizontal, 0)
-            }
-            .ignoresSafeArea(edges: .top)
-            
-            // Custom Navigation Bar
-            VStack {
-                HStack {
-                    Button(action: { dismiss() }) {
-                        ZStack {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .frame(width: 40, height: 40)
-                            
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Navigation bar
+                    HStack {
+                        Button(action: { dismiss() }) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.gray)
+                                .frame(width: 32, height: 32)
+                                .background(Circle().fill(Color(.systemGray6)))
                         }
-                    }
-                    
-                    Spacer()
-                    
-                    // Share button
-                    Button(action: { /* Share functionality */ }) {
-                        ZStack {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .frame(width: 40, height: 40)
-                            
+
+                        Spacer()
+
+                        VStack(spacing: 2) {
+                            Text(formatDate(loggedMeal.loggedAt))
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.secondary)
+                            Text(formatTime(loggedMeal.loggedAt))
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(.secondary.opacity(0.8))
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            showingShareSheet = true
+                        }) {
                             Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.gray)
+                                .frame(width: 32, height: 32)
+                                .background(Circle().fill(Color(.systemGray6)))
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+
+                    // Meal name
+                    Text(loggedMeal.mealName)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .opacity(animateContent ? 1.0 : 0.0)
+                        .offset(y: animateContent ? 0 : 20)
+
+                    // Meal image
+                    Group {
+                        if let image = loggedMeal.image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 300)
+                                .clipped()
+                                .cornerRadius(20)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                )
+                                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+                        } else if let imageUrl = loggedMeal.imageUrl, let url = URL(string: imageUrl) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(height: 300)
+                                    .clipped()
+                                    .cornerRadius(20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                    )
+                                    .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+                            } placeholder: {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(Color(.systemGray5))
+                                        .frame(height: 300)
+
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                }
+                            }
+                        } else {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.green.opacity(0.3), .mint.opacity(0.3)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(height: 300)
+
+                                VStack(spacing: 12) {
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 40, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.7))
+
+                                    Text("No Image")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                            }
+                            .cornerRadius(20)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+                        }
+                    }
+                    .scaleEffect(animateImage ? 1.0 : 0.98)
+                    .opacity(animateImage ? 1.0 : 0.0)
+
+                    // Edit button overlay on image (servings indicator)
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 8) {
+                            Text("1")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            Image(systemName: "pencil")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        )
+                        .padding(.trailing, 35)
+                        .offset(y: -40)
+                    }
+
+                    // Description section
+                    Text(loggedMeal.description)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .opacity(animateContent ? 1.0 : 0.0)
+                        .offset(y: animateContent ? 0 : 20)
+
+                    // Calories section
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.orange)
+
+                            Text("Calories")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Text("\(loggedMeal.calories)")
+                            .font(.system(size: 48, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 3)
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    .offset(y: animateContent ? 0 : 20)
+
+                    // Macros section
+                    HStack(spacing: 12) {
+                        // Protein
+                        MacroColumn(
+                            icon: "person.fill",
+                            title: "Protein",
+                            value: "\(Int(loggedMeal.macros.protein))g",
+                            color: .red
+                        )
+
+                        // Carbs
+                        MacroColumn(
+                            icon: "leaf.fill",
+                            title: "Carbs",
+                            value: "\(Int(loggedMeal.macros.carbohydrates))g",
+                            color: .blue
+                        )
+
+                        // Fats
+                        MacroColumn(
+                            icon: "drop.fill",
+                            title: "Fats",
+                            value: "\(Int(loggedMeal.macros.fat))g",
+                            color: .orange
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 3)
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    .offset(y: animateContent ? 0 : 30)
+
+                    // Micronutrients section
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.purple)
+
+                            Text("Micronutrients")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            Spacer()
+                        }
+
+                        HStack(spacing: 12) {
+                            // Fiber
+                            MacroColumn(
+                                icon: "leaf.circle.fill",
+                                title: "Fiber",
+                                value: "\(Int(loggedMeal.macros.fiber))g",
+                                color: .green
+                            )
+
+                            // Sugar
+                            MacroColumn(
+                                icon: "cube.fill",
+                                title: "Sugar",
+                                value: "\(Int(loggedMeal.macros.sugar))g",
+                                color: .pink
+                            )
+
+                            // Sodium
+                            MacroColumn(
+                                icon: "drop.triangle.fill",
+                                title: "Sodium",
+                                value: "\(Int(loggedMeal.macros.sodium))mg",
+                                color: .cyan
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 3)
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    .offset(y: animateContent ? 0 : 40)
+
+                    // Health Score section
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.pink)
+
+                            Text("Preppi Score")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            Text("\(loggedMeal.healthScore)/10")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.primary)
+                        }
+
+                        // Health score progress bar
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color(.systemGray5))
+                                    .frame(height: 8)
+
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.green, .mint],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: geometry.size.width * (Double(loggedMeal.healthScore) / 10.0), height: 8)
+                                    .animation(.easeInOut(duration: 1.0), value: animateContent)
+                            }
+                        }
+                        .frame(height: 8)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 3)
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    .offset(y: animateContent ? 0 : 30)
+
+                    // Bottom spacing before delete button
+                    Spacer(minLength: 40)
+
+                    // Delete button
+                    Button(action: {
+                        showingDeleteAlert = true
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 16, weight: .medium))
+
+                            Text("Delete Meal")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    .offset(y: animateContent ? 0 : 50)
+
+                    // Bottom safe area spacing
+                    Color.clear.frame(height: 40)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 60)
-                
-                Spacer()
+                .padding(.bottom, 30)
             }
+            .navigationBarHidden(true)
+            .background(Color(.systemBackground))
         }
         .onAppear {
-            print("🔍 LoggedMealDetailView onAppear - Meal: \(loggedMeal.mealName)")
-            
-            withAnimation(.easeOut(duration: 0.8).delay(0.1)) {
+            withAnimation(.easeOut(duration: 0.6)) {
+                animateImage = true
+            }
+
+            withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
                 animateContent = true
+            }
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            if let image = loggedMeal.image {
+                ShareSheet(items: [
+                    generateShareText(),
+                    image
+                ])
+            } else {
+                ShareSheet(items: [generateShareText()])
             }
         }
         .alert("Delete Meal", isPresented: $showingDeleteAlert) {
@@ -123,407 +385,57 @@ struct LoggedMealDetailView: View {
             Text("Are you sure you want to delete this logged meal? This action cannot be undone.")
         }
     }
-    
-    // MARK: - Hero Image Section
-    private var heroImageSection: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                if let image = loggedMeal.image {
-                    // Local image
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else if let imageUrl = loggedMeal.imageUrl, let url = URL(string: imageUrl) {
-                    // Remote image
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ZStack {
-                            LinearGradient(
-                                colors: [.green.opacity(0.3), .mint.opacity(0.3)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                            
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
-                        }
-                    }
-                } else {
-                    // Placeholder with gradient
-                    ZStack {
-                        LinearGradient(
-                            colors: [.green.opacity(0.6), .mint.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        
-                        VStack(spacing: 12) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 40, weight: .medium))
-                                .foregroundColor(.white)
-                            
-                            Text("No Image")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-                }
-            }
-            .frame(height: 400)
-            .clipped()
-            
-            // Gradient overlay
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.3)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 400)
-        }
-    }
-    
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            Text(loggedMeal.mealName)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.green, .mint],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .multilineTextAlignment(.center)
-                .lineLimit(4)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 8)
-            
-            HStack(spacing: 8) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
-                
-                Text(formatDateTime(loggedMeal.loggedAt))
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color(.systemGray6))
-            )
-            
-            // Meal type badge if available
-            if let mealType = loggedMeal.mealType {
-                Text(mealType.capitalized)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.green, .mint],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    )
-            }
-        }
-    }
-    
-    // MARK: - Description Section
-    private var descriptionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "text.alignleft")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.green)
 
-                Text("Description")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
-
-                Spacer()
-            }
-
-            Text(loggedMeal.description)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(.secondary)
-                .lineLimit(nil)
-                .lineSpacing(2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
-                )
-        )
-    }
-    
-    // MARK: - Stats Grid
-    private var statsGrid: some View {
-        VStack(spacing: 16) {
-            // Calories - Featured
-            caloriesCard
-            
-            // Macros Grid
-            macrosGrid
-        }
-    }
-    
-    private var caloriesCard: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.orange)
-                
-                Text("Total Calories")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-            }
-            
-            HStack {
-                Text("\(loggedMeal.calories)")
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(.orange)
-                
-                Text("kcal")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.orange.opacity(0.7))
-                    .offset(y: 8)
-                
-                Spacer()
-            }
-        }
-        .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        colors: [.orange.opacity(0.1), .orange.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
-    
-    private var macrosGrid: some View {
-        HStack(spacing: 12) {
-            DetailMacroCard(
-                icon: "figure.strengthtraining.traditional",
-                title: "Protein",
-                value: Int(loggedMeal.macros.protein),
-                unit: "g",
-                color: .red,
-                gradient: [.red.opacity(0.1), .red.opacity(0.05)]
-            )
-            
-            DetailMacroCard(
-                icon: "leaf.fill",
-                title: "Carbs",
-                value: Int(loggedMeal.macros.carbohydrates),
-                unit: "g",
-                color: .blue,
-                gradient: [.blue.opacity(0.1), .blue.opacity(0.05)]
-            )
-            
-            DetailMacroCard(
-                icon: "drop.fill",
-                title: "Fats",
-                value: Int(loggedMeal.macros.fat),
-                unit: "g",
-                color: .purple,
-                gradient: [.purple.opacity(0.1), .purple.opacity(0.05)]
-            )
-        }
-    }
-    
-    // MARK: - Preppi Score Section
-    private var preppiScoreSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.green)
-                
-                Text("Preppi Score")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-            }
-            
-            VStack(spacing: 16) {
-                // Score display
-                HStack {
-                    Text("\(loggedMeal.healthScore)")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundColor(.green)
-                    
-                    Text("/10")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.green.opacity(0.7))
-                        .offset(y: 8)
-                    
-                    Spacer()
-                }
-                
-                // Score visualization
-                HStack(spacing: 6) {
-                    ForEach(1...10, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(index <= loggedMeal.healthScore ? 
-                                  LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing) :
-                                  LinearGradient(colors: [.gray.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
-                            )
-                            .frame(height: 8)
-                            .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05), value: animateContent)
-                    }
-                }
-                
-                // Score description
-                Text(scoreDescription)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-            }
-        }
-        .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        colors: [.green.opacity(0.1), .mint.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.green.opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
-    
-    // MARK: - Delete Button
-    private var deleteButton: some View {
-        Button(action: {
-            showingDeleteAlert = true
-        }) {
-            HStack(spacing: 12) {
-                Image(systemName: "trash.fill")
-                    .font(.system(size: 16, weight: .medium))
-                
-                Text("Delete Meal")
-                    .font(.system(size: 16, weight: .semibold))
-            }
-            .foregroundColor(.red)
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.red.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    // MARK: - Helper Properties
-    private var scoreDescription: String {
-        switch loggedMeal.healthScore {
-        case 9...10: return "Excellent choice! This meal is very nutritious."
-        case 7...8: return "Great meal with good nutritional balance."
-        case 5...6: return "Decent meal, could be improved."
-        case 3...4: return "Consider healthier alternatives."
-        default: return "This meal could be much healthier."
-        }
-    }
-    
-    private func formatDateTime(_ date: Date) -> String {
+    // MARK: - Helper Functions
+    private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+
+    private func generateShareText() -> String {
+        let dateStr = formatDate(loggedMeal.loggedAt)
+        let timeStr = formatTime(loggedMeal.loggedAt)
+
+        var text = """
+        🍽️ \(loggedMeal.mealName)
+
+        📅 \(dateStr) at \(timeStr)
+        🔥 \(loggedMeal.calories) calories
+
+        Macros:
+        💪 Protein: \(Int(loggedMeal.macros.protein))g
+        🍞 Carbs: \(Int(loggedMeal.macros.carbohydrates))g
+        🥑 Fats: \(Int(loggedMeal.macros.fat))g
+        """
+
+        if !loggedMeal.description.isEmpty {
+            text += "\n\n📝 \(loggedMeal.description)"
+        }
+
+        text += "\n\n✨ Tracked with Preppi AI"
+
+        return text
+    }
 }
 
-// MARK: - Detail Macro Card Component
-struct DetailMacroCard: View {
-    let icon: String
-    let title: String
-    let value: Int
-    let unit: String
-    let color: Color
-    let gradient: [Color]
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundColor(color)
-            
-            VStack(spacing: 4) {
-                Text("\(value)")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(color)
-                
-                Text(unit)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(color.opacity(0.7))
-            }
-            
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    LinearGradient(
-                        colors: gradient,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(color.opacity(0.3), lineWidth: 1)
-                )
-        )
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        return controller
     }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

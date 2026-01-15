@@ -118,21 +118,21 @@ class AuthService: ObservableObject {
     }
     
     // MARK: - Sign In
-    
+
     func signIn(email: String, password: String) async {
         isLoading = true
         errorMessage = nil
-        
+
         do {
             let session = try await auth.signIn(
                 email: email,
                 password: password
             )
-            
+
             self.currentUser = session.user
             self.isAuthenticated = true
             print("✅ Sign in successful: \(email)")
-            
+
             // Track successful sign in in Mixpanel
             self.trackUserIdentification(user: session.user, isNewUser: false)
             MixpanelService.shared.track(
@@ -141,13 +141,67 @@ class AuthService: ObservableObject {
                     MixpanelService.Properties.signUpMethod: "email"
                 ]
             )
-            
+
         } catch {
             self.errorMessage = "Sign in failed: \(error.localizedDescription)"
             print("❌ Sign in error: \(error)")
         }
-        
+
         isLoading = false
+    }
+
+    // MARK: - Google Sign In
+
+    func signInWithGoogle() async throws {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            // Start OAuth sign-in with Google
+            // This will open Safari/SFSafariViewController for the OAuth flow
+            try await auth.signInWithOAuth(
+                provider: .google,
+                redirectTo: URL(string: "preppiai://auth/callback")
+            )
+
+            print("✅ Google OAuth flow initiated")
+
+        } catch {
+            self.errorMessage = "Google sign in failed: \(error.localizedDescription)"
+            print("❌ Google sign in error: \(error)")
+            isLoading = false
+            throw error
+        }
+    }
+
+    // Handle OAuth callback
+    func handleOAuthCallback(url: URL) async {
+        do {
+            // Exchange the OAuth code for a session
+            try await auth.session(from: url)
+
+            // The auth state listener will automatically update currentUser and isAuthenticated
+            // But we can also track the sign-in event here
+            if let user = currentUser {
+                print("✅ Google sign in successful: \(user.email ?? "No email")")
+
+                // Track successful Google sign in in Mixpanel
+                self.trackUserIdentification(user: user, isNewUser: false)
+                MixpanelService.shared.track(
+                    event: MixpanelService.Events.userSignedIn,
+                    properties: [
+                        MixpanelService.Properties.signUpMethod: "google"
+                    ]
+                )
+            }
+
+            isLoading = false
+
+        } catch {
+            self.errorMessage = "OAuth callback failed: \(error.localizedDescription)"
+            print("❌ OAuth callback error: \(error)")
+            isLoading = false
+        }
     }
     
     // MARK: - Sign Out

@@ -32,7 +32,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "3223"
             endingLineNumber = "3223"
-            landmarkName = "MealCompletionSheet"
+            landmarkName = "SwipeableNutritionCard"
             landmarkType = "14">
          </BreakpointContent>
       </BreakpointProxy>

@@ -74,12 +74,22 @@ struct Preppi_AIApp: App {
     
     private func handleIncomingURL(_ url: URL) {
         print("📱 Received URL: \(url)")
-        
+
+        // Handle OAuth callback (preppiai://auth/callback)
+        if url.scheme == "preppiai" && url.host == "auth" {
+            print("🔐 OAuth callback received")
+            Task {
+                await AuthService.shared.handleOAuthCallback(url: url)
+            }
+            return
+        }
+
+        // Handle other app URLs (preppi-ai://)
         guard url.scheme == "preppi-ai" else {
             print("❌ Invalid URL scheme: \(url.scheme ?? "nil")")
             return
         }
-        
+
         if url.host == "shared-image" {
             // Handle shared image from extension
             handleSharedImageURL(url)
@@ -185,47 +195,78 @@ struct Preppi_AIApp: App {
     
     
     private func setupNotifications() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        // Request notification permissions and schedule meal/plan reminders
+        Task {
+            let granted = await NotificationService.shared.requestPermission()
             if granted {
-                print("✅ Notification permission granted")
-            } else if let error = error {
-                print("❌ Notification permission error: \(error)")
+                print("✅ Notification permissions granted and reminders scheduled")
+
+                // Track that notifications were enabled
+                MixpanelService.shared.track(event: "notifications_enabled")
             } else {
-                print("❌ Notification permission denied")
+                print("⚠️ Notification permissions denied")
             }
         }
-        
+
         // Set up notification categories
-        let openAction = UNNotificationAction(identifier: "OPEN_APP", title: "Open Recipe", options: [.foreground])
-        let category = UNNotificationCategory(identifier: "SHARED_IMAGE", actions: [openAction], intentIdentifiers: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+        let openAction = UNNotificationAction(identifier: "OPEN_APP", title: "Open App", options: [.foreground])
+        let mealReminderCategory = UNNotificationCategory(identifier: "MEAL_REMINDER", actions: [openAction], intentIdentifiers: [])
+        let mealPlanCategory = UNNotificationCategory(identifier: "MEAL_PLAN_REMINDER", actions: [openAction], intentIdentifiers: [])
+        let sharedImageCategory = UNNotificationCategory(identifier: "SHARED_IMAGE", actions: [openAction], intentIdentifiers: [])
+
+        UNUserNotificationCenter.current().setNotificationCategories([mealReminderCategory, mealPlanCategory, sharedImageCategory])
     }
 }
 
 // MARK: - Notification Delegate
 class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, ObservableObject {
     static let shared = NotificationDelegate()
-    
+
     // Handle notification when app is in foreground
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         print("📱 Notification received while app in foreground")
-        completionHandler([.alert, .sound])
+        completionHandler([.banner, .sound, .badge])
     }
-    
+
     // Handle notification tap
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         print("📱 Notification tapped: \(response.notification.request.content.userInfo)")
-        
-        if let action = response.notification.request.content.userInfo["action"] as? String,
-           action == "shared_image" {
+
+        let userInfo = response.notification.request.content.userInfo
+
+        // Handle shared image notifications
+        if let action = userInfo["action"] as? String, action == "shared_image" {
             print("📸 Shared image notification tapped - checking for shared images")
-            
+
             // Send notification to trigger shared image check
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: NSNotification.Name("CheckForSharedImage"), object: nil)
             }
         }
-        
+
+        // Handle meal reminder and meal plan notifications
+        if let action = userInfo["action"] as? String, action == "openHome" {
+            print("🔔 Meal reminder notification tapped - opening Home tab")
+
+            // Send notification to open Home tab
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: NSNotification.Name("OpenHomeTab"), object: nil)
+            }
+
+            // Track notification interaction
+            if let mealType = userInfo["mealType"] as? String {
+                MixpanelService.shared.track(
+                    event: "notification_tapped",
+                    properties: ["meal_type": mealType]
+                )
+            } else {
+                MixpanelService.shared.track(
+                    event: "notification_tapped",
+                    properties: ["type": "weekly_meal_plan"]
+                )
+            }
+        }
+
         completionHandler()
     }
 }

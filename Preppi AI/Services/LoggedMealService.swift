@@ -22,7 +22,17 @@ class LoggedMealService: ObservableObject {
     func logMeal(from analysisResult: MealAnalysisResult, image: UIImage?, mealType: String? = nil, loggedDate: Date = Date()) {
         Task {
             await saveMealToDatabase(from: analysisResult, image: image, mealType: mealType, loggedDate: loggedDate)
-            
+
+            // Notify streak service about the logged meal
+            await notifyStreakService(mealType: mealType, loggedDate: loggedDate)
+        }
+    }
+
+    // Log meal from meal plan
+    func logMealFromMealPlan(dayMeal: DayMeal, mealType: String, loggedDate: Date = Date()) {
+        Task {
+            await saveMealPlanMealToDatabase(dayMeal: dayMeal, mealType: mealType, loggedDate: loggedDate)
+
             // Notify streak service about the logged meal
             await notifyStreakService(mealType: mealType, loggedDate: loggedDate)
         }
@@ -126,6 +136,7 @@ class LoggedMealService: ObservableObject {
                 healthScore: analysisResult.healthScore,
                 imageUrl: imageUrl,
                 mealType: mealType,
+                isFromMealPlan: false, // Mark as photo meal
                 loggedAt: ISO8601DateFormatter().string(from: loggedDate)
             )
             
@@ -144,6 +155,9 @@ class LoggedMealService: ObservableObject {
             
             print("✅ Logged meal saved to database: \(newLoggedMeal.mealName)")
             
+            // Post notification to refresh UI
+            NotificationCenter.default.post(name: NSNotification.Name("MealLogged"), object: nil)
+            
         } catch {
             print("❌ Failed to save logged meal: \(error)")
             errorMessage = error.localizedDescription
@@ -151,7 +165,62 @@ class LoggedMealService: ObservableObject {
         
         isLoading = false
     }
-    
+
+    @MainActor
+    private func saveMealPlanMealToDatabase(dayMeal: DayMeal, mealType: String, loggedDate: Date) async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            // Get current user
+            let user = try await supabase.auth.user()
+            let userId = user.id
+
+            // Create meal insert data from DayMeal
+            let mealInsert = MealInsertData(
+                userId: userId.uuidString,
+                mealName: dayMeal.meal.name,
+                description: dayMeal.meal.description,
+                calories: dayMeal.meal.calories,
+                protein: dayMeal.meal.macros?.protein ?? 0,
+                carbohydrates: dayMeal.meal.macros?.carbohydrates ?? 0,
+                fat: dayMeal.meal.macros?.fat ?? 0,
+                fiber: dayMeal.meal.macros?.fiber ?? 0,
+                sugar: dayMeal.meal.macros?.sugar ?? 0,
+                sodium: dayMeal.meal.macros?.sodium ?? 0,
+                healthScore: 5, // Default health score for meal plan meals
+                imageUrl: dayMeal.meal.imageUrl,
+                mealType: mealType,
+                isFromMealPlan: true, // Mark as from meal plan
+                loggedAt: ISO8601DateFormatter().string(from: loggedDate)
+            )
+
+            // Insert into database
+            let response: DatabaseLoggedMeal = try await supabase
+                .from("logged_meals")
+                .insert(mealInsert)
+                .select()
+                .single()
+                .execute()
+                .value
+
+            // Add to local array
+            let newLoggedMeal = response.toLoggedMeal()
+            loggedMeals.insert(newLoggedMeal, at: 0)
+
+            print("✅ Meal plan meal logged to database: \(newLoggedMeal.mealName)")
+            
+            // Post notification to refresh UI
+            NotificationCenter.default.post(name: NSNotification.Name("MealLogged"), object: nil)
+
+        } catch {
+            print("❌ Failed to save meal plan meal: \(error)")
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
     @MainActor
     private func loadLoggedMeals() async {
         isLoading = true
@@ -161,6 +230,8 @@ class LoggedMealService: ObservableObject {
             // Get current user
             let user = try await supabase.auth.user()
             let userId = user.id
+            
+            print("🔍 DEBUG: Loading logged meals for user: \(userId.uuidString)")
             
             // Fetch logged meals from database
             let response: [DatabaseLoggedMeal] = try await supabase
@@ -175,6 +246,11 @@ class LoggedMealService: ObservableObject {
             loggedMeals = response.map { $0.toLoggedMeal() }
             
             print("✅ Loaded \(loggedMeals.count) logged meals from database")
+            
+            // Debug: Print each loaded meal
+            for meal in loggedMeals {
+                print("📊 DEBUG: Loaded meal - \(meal.mealName) on \(meal.loggedAt) (Type: \(meal.mealType ?? "none"))")
+            }
             
         } catch {
             print("❌ Failed to load logged meals: \(error)")

@@ -120,11 +120,11 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
-            CameraView()
+            MealPlanView()
                 .environmentObject(appState)
                 .tabItem {
-                    Image(systemName: "camera.fill")
-                    Text("Camera")
+                    Image(systemName: "fork.knife")
+                    Text("Meal Plan")
                 }
                 .tag(1)
 
@@ -135,32 +135,27 @@ struct MainTabView: View {
                     Text("Progress")
                 }
                 .tag(2)
-            
+
+            FeedbackView()
+                .environmentObject(appState)
+                .tabItem {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                    Text("Feedback")
+                }
+                .tag(3)
+
             SettingsView()
                 .environmentObject(appState)
                 .tabItem {
                     Image(systemName: "gear")
                     Text("Settings")
                 }
-                .tag(3)
+                .tag(4)
         }
         .accentColor(.green)
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SharedImageReceived"))) { notification in
-            if let sharedImage = notification.object as? UIImage {
-                print("📸 MainTabView received shared image notification")
-                appState.handleSharedImage(sharedImage)
-                // Switch to Camera tab (CameraView) to show the photo processing
-                selectedTab = 1
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CheckForSharedImage"))) { _ in
-            print("📸 MainTabView received check for shared image notification")
-            // Switch to Camera tab first
-            selectedTab = 1
-            // Trigger shared image check
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NotificationCenter.default.post(name: NSNotification.Name("TriggerSharedImageCheck"), object: nil)
-            }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenHomeTab"))) { _ in
+            print("🔔 MainTabView received notification tap - opening Home tab")
+            selectedTab = 0
         }
     }
 }
@@ -200,10 +195,14 @@ struct HomeView: View {
     @State private var mealAnalysisResult: MealAnalysisResult?
     @State private var isAnalyzingMeal = false
     @StateObject private var loggedMealService = LoggedMealService.shared
+    @StateObject private var exerciseService = ExerciseService.shared
     @State private var showingLoggedMealDetail = false
     @State private var selectedLoggedMeal: LoggedMeal?
     @State private var pendingMealType: String? // Track which meal type is being logged
-    
+    @State private var showingQuickActionPopup = false // For the plus button popup
+    @State private var showingExerciseLogging = false // For exercise logging sheet
+    @State private var exerciseDescription = "" // User's exercise description
+
     // Performance optimization: Cache meal plans to avoid repeated database calls
     @State private var cachedMealPlans: [DatabaseMealPlan] = []
     @State private var lastMealPlansUpdate: Date = Date.distantPast
@@ -254,7 +253,8 @@ struct HomeView: View {
                 streakService.loadStreakData()
                 print("🔄 Refreshing logged meals on HomeView appear...")
                 loggedMealService.refreshMeals()
-                
+                exerciseService.refreshExercises()
+
                 // Debug: Print all logged meals after refresh
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     print("📊 Total logged meals: \(loggedMealService.loggedMeals.count)")
@@ -265,6 +265,31 @@ struct HomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 // Refresh streak data when app becomes active
+                streakService.refreshStreakData()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MealPlanUpdated"))) { _ in
+                // Refresh meal plans when a meal is replaced
+                print("🔄 HomeView received meal plan updated notification - refreshing data")
+                lastMealPlansUpdate = Date.distantPast
+                loadDailyNutrition()
+                loadSelectedDayMeal()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MealLogged"))) { _ in
+                // Refresh UI when a meal is logged
+                print("🔄 HomeView received meal logged notification - refreshing data")
+                loadDailyNutrition()
+                loggedMealService.refreshMeals()
+                streakService.refreshStreakData()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ExerciseLogged"))) { _ in
+                // Refresh UI when an exercise is logged
+                print("🔄 HomeView received exercise logged notification - refreshing data")
+                loadDailyNutrition()
+                exerciseService.refreshExercises()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MealCompletionUpdated"))) { _ in
+                // Refresh UI when meal completions are updated
+                print("🔄 HomeView received meal completion updated notification - refreshing data")
                 streakService.refreshStreakData()
             }
             .onChange(of: selectedDate) { newDate in
@@ -361,28 +386,35 @@ struct HomeView: View {
                         mealAnalysisResult = nil
                     },
                     onAddDetails: {
-                        // TODO: Implement add details functionality
+                        // Sheet is handled internally in MealAnalysisResultView
                         print("Add details tapped")
                     },
                     onLogMeal: {
                         // Log the meal with meal type if specified, using the selected date
-                        loggedMealService.logMeal(from: result, image: image, mealType: pendingMealType, loggedDate: selectedDate)
-                        
-                        // Track in Mixpanel
-                        MixpanelService.shared.track(
-                            event: MixpanelService.Events.mealButtonTapped,
-                            properties: [
-                                MixpanelService.Properties.mealName: result.mealName,
-                                MixpanelService.Properties.calories: result.calories,
-                                MixpanelService.Properties.mealType: "logged_meal"
-                            ]
-                        )
-                        
+                        // Use the current mealAnalysisResult which may have been refined
+                        if let currentResult = mealAnalysisResult {
+                            loggedMealService.logMeal(from: currentResult, image: image, mealType: pendingMealType, loggedDate: selectedDate)
+
+                            // Track in Mixpanel
+                            MixpanelService.shared.track(
+                                event: MixpanelService.Events.mealButtonTapped,
+                                properties: [
+                                    MixpanelService.Properties.mealName: currentResult.mealName,
+                                    MixpanelService.Properties.calories: currentResult.calories,
+                                    MixpanelService.Properties.mealType: "logged_meal"
+                                ]
+                            )
+                        }
+
                         // Close the analysis view
                         showingMealAnalysis = false
                         selectedMealImage = nil
                         mealAnalysisResult = nil
                         pendingMealType = nil // Clear pending meal type
+                    },
+                    onRefinedAnalysis: { refinedResult in
+                        // Update the meal analysis result with the refined version
+                        mealAnalysisResult = refinedResult
                     }
                 )
             }
@@ -396,6 +428,19 @@ struct HomeView: View {
             selectedLoggedMeal = nil
         }) { meal in
             LoggedMealDetailView(loggedMeal: meal)
+        }
+        .sheet(isPresented: $showingExerciseLogging) {
+            ExerciseLoggingSheet(
+                exerciseDescription: $exerciseDescription,
+                selectedDate: selectedDate,
+                onSubmit: {
+                    analyzeAndLogExercise()
+                },
+                onCancel: {
+                    showingExerciseLogging = false
+                    exerciseDescription = ""
+                }
+            )
         }
     }
     
@@ -412,28 +457,30 @@ struct HomeView: View {
                 endPoint: .bottom
             )
             .ignoresSafeArea()
-            
+
             ScrollView {
                 VStack(spacing: 0) {
                     // Top section with logo
                     topSection
-                    
+
                     // Week day selector
                     weekDaySelector
-                    
+
                     // Daily plan summary
                     dailyPlanSummary
-                    
-                    // Action buttons
-                    actionButtons
-                    
+
                     // Bottom spacing
                     Color.clear.frame(height: 100)
                 }
             }
-            
-            // Floating pencil icon at bottom right
-            floatingEditButton
+
+            // Floating plus button
+            floatingPlusButton
+
+            // Quick action popup overlay
+            if showingQuickActionPopup {
+                quickActionPopup
+            }
         }
     }
     
@@ -449,32 +496,6 @@ struct HomeView: View {
                 .environmentObject(appState)
         default:
             EmptyView()
-        }
-    }
-    
-    // MARK: - Floating Edit Button
-    private var floatingEditButton: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                Button(action: {
-                    showingMealEditPopup = true
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 56, height: 56)
-                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                        
-                        Image(systemName: "pencil")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.trailing, 20)
-                .padding(.bottom, 20)
-            }
         }
     }
     
@@ -610,37 +631,36 @@ struct HomeView: View {
                 if hasNoMeals && !appState.hasWeeklyMealPlanPreference(for: selectedDate) {
                     startButton
                     
-                    // Extra meal logging section for NoView
+                    // Logged meals section for NoView
                     VStack(spacing: 16) {
-                        // Section title
-                        HStack {
-                            Text("Track Additional Meals")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.primary)
-                            Spacer()
+                        // Get completed meals from StreakService (meal_completions table)
+                        let completedMealsForDate = streakService.getCompletedMealsForDate(selectedDate)
+                        print("🏠 DEBUG: Home screen - Found \(completedMealsForDate.count) completed meals for \(selectedDate)")
+                        
+                        // Also get any logged meals from LoggedMealService (logged_meals table) as backup
+                        let allLoggedMealsForDate = loggedMealService.getLoggedMealsForDate(selectedDate)
+                        print("🏠 DEBUG: Home screen - Found \(allLoggedMealsForDate.count) logged meals for \(selectedDate)")
+                        
+                        // Display completed meals from meal plan
+                        if !completedMealsForDate.isEmpty {
+                            ForEach(completedMealsForDate) { mealInstance in
+                                CompletedMealCard(
+                                    mealInstance: mealInstance,
+                                    selectedDate: selectedDate,
+                                    selectedBreakfastMeal: selectedBreakfastMeal,
+                                    selectedLunchMeal: selectedLunchMeal,
+                                    selectedDinnerMeal: selectedDinnerMeal
+                                )
+                            }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
                         
-                        // Extra meal logging card
-                        extraMealCard
-                        
-                        // Extra logged meals for the selected date (only meals without specific meal types)
-                        let extraLoggedMealsForDate = loggedMealService.getLoggedMealsForDate(selectedDate).filter { $0.mealType == nil }
-                        if extraLoggedMealsForDate.isEmpty {
-                            Text("No extra logged meals for today")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.vertical, 8)
-                        } else {
-                            ForEach(extraLoggedMealsForDate) { loggedMeal in
+                        // Display logged meals from photo logging as backup
+                        if !allLoggedMealsForDate.isEmpty {
+                            ForEach(allLoggedMealsForDate) { loggedMeal in
                                 LoggedMealCard(loggedMeal: loggedMeal) {
-                                    print("📱 Tapping extra logged meal (NoView): \(loggedMeal.mealName)")
+                                    print("📱 Tapping logged meal (NoView): \(loggedMeal.mealName)")
                                     print("📱 Setting selectedLoggedMeal to: \(loggedMeal.id)")
-                                    print("📱 Meal has imageUrl: \(loggedMeal.imageUrl != nil)")
-                                    print("📱 Meal calories: \(loggedMeal.calories)")
-                                    
+
                                     // Ensure UI update happens on main thread
                                     DispatchQueue.main.async {
                                         selectedLoggedMeal = loggedMeal
@@ -649,77 +669,132 @@ struct HomeView: View {
                                 }
                             }
                         }
+                        } else {
+                            // Placeholder when no meals are logged
+                            VStack(spacing: 12) {
+                                Image(systemName: "fork.knife.circle")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray.opacity(0.4))
+
+                                Text("No meals logged today")
+                                    .font(.headline)
+                                    .foregroundColor(.gray)
+
+                                Text("Press the + button to log meals or log meals directly from the meal plan")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 60)
+                        }
+
+                        // Exercise cards for the selected date
+                        let exercisesForDate = exerciseService.getExercisesForDate(selectedDate)
+                        if !exercisesForDate.isEmpty {
+                            ForEach(exercisesForDate) { exercise in
+                                exerciseCard(exercise: exercise)
+                            }
+                        }
                     }
                 } else {
-                    // Breakfast section
-                    if let loggedBreakfast = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "breakfast") {
-                        LoggedMealCard(loggedMeal: loggedBreakfast) {
-                            print("📱 Tapping logged breakfast (YesView): \(loggedBreakfast.mealName)")
-                            DispatchQueue.main.async {
-                                selectedLoggedMeal = loggedBreakfast
-                                print("📱 Breakfast YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
-                            }
-                        }
-                    } else if let breakfastMeal = selectedBreakfastMeal {
-                        simplifiedMealCard(dayMeal: breakfastMeal, mealType: "breakfast")
-                    } else {
-                        addMealButton(mealType: "Breakfast", icon: "sunrise.fill", color: .orange)
-                    }
-
-                    // Lunch section
-                    if let loggedLunch = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "lunch") {
-                        LoggedMealCard(loggedMeal: loggedLunch) {
-                            print("📱 Tapping logged lunch (YesView): \(loggedLunch.mealName)")
-                            DispatchQueue.main.async {
-                                selectedLoggedMeal = loggedLunch
-                                print("📱 Lunch YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
-                            }
-                        }
-                    } else if let lunchMeal = selectedLunchMeal {
-                        simplifiedMealCard(dayMeal: lunchMeal, mealType: "lunch")
-                    } else {
-                        addMealButton(mealType: "Lunch", icon: "sun.max.fill", color: .yellow)
-                    }
-
-                    // Dinner section
-                    if let loggedDinner = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "dinner") {
-                        LoggedMealCard(loggedMeal: loggedDinner) {
-                            print("📱 Tapping logged dinner (YesView): \(loggedDinner.mealName)")
-                            DispatchQueue.main.async {
-                                selectedLoggedMeal = loggedDinner
-                                print("📱 Dinner YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
-                            }
-                        }
-                    } else if let dinnerMeal = selectedDayMeal {
-                        simplifiedMealCard(dayMeal: dinnerMeal, mealType: "dinner")
-                    } else {
-                        addMealButton(mealType: "Dinner", icon: "moon.fill", color: .purple)
-                    }
+                    // Check if there are any logged meals for the selected date
+                    // Get completed meals from StreakService (meal_completions table)
+                    let completedMealsForDate = streakService.getCompletedMealsForDate(selectedDate)
+                    print("🏠 DEBUG: YesView - Found \(completedMealsForDate.count) completed meals for \(selectedDate)")
                     
-                    // Extra meal logging card
-                    extraMealCard
-                    
-                    // Extra logged meals for the selected date (only meals without specific meal types)
+                    // Also get logged meals as backup
+                    let loggedBreakfast = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "breakfast")
+                    let loggedLunch = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "lunch")
+                    let loggedDinner = loggedMealService.getLoggedMealForDateAndType(selectedDate, mealType: "dinner")
                     let extraLoggedMealsForDate = loggedMealService.getLoggedMealsForDate(selectedDate).filter { $0.mealType == nil }
-                    if extraLoggedMealsForDate.isEmpty {
-                        Text("No extra logged meals for today")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.vertical, 8)
-                    } else {
-                        ForEach(extraLoggedMealsForDate) { loggedMeal in
-                            LoggedMealCard(loggedMeal: loggedMeal) {
-                                print("📱 Tapping extra logged meal: \(loggedMeal.mealName)")
-                                print("📱 Setting selectedLoggedMeal to: \(loggedMeal.id)")
-                                print("📱 Meal has imageUrl: \(loggedMeal.imageUrl != nil)")
-                                print("📱 Meal calories: \(loggedMeal.calories)")
-                                
-                                // Ensure UI update happens on main thread
+                    let hasAnyLoggedMeals = loggedBreakfast != nil || loggedLunch != nil || loggedDinner != nil || !extraLoggedMealsForDate.isEmpty
+
+                    if !completedMealsForDate.isEmpty || hasAnyLoggedMeals {
+                        // Display completed meals from meal plan
+                        ForEach(completedMealsForDate) { mealInstance in
+                            CompletedMealCard(
+                                mealInstance: mealInstance,
+                                selectedDate: selectedDate,
+                                selectedBreakfastMeal: selectedBreakfastMeal,
+                                selectedLunchMeal: selectedLunchMeal,
+                                selectedDinnerMeal: selectedDinnerMeal
+                            )
+                        }
+                        
+                        // Display logged meals from photo logging as backup
+                        if let loggedBreakfast = loggedBreakfast {
+                            LoggedMealCard(loggedMeal: loggedBreakfast) {
+                                print("📱 Tapping logged breakfast (YesView): \(loggedBreakfast.mealName)")
                                 DispatchQueue.main.async {
-                                    selectedLoggedMeal = loggedMeal
-                                    print("📱 UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                                    selectedLoggedMeal = loggedBreakfast
+                                    print("📱 Breakfast YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
                                 }
                             }
+                        }
+
+                        if let loggedLunch = loggedLunch {
+                            LoggedMealCard(loggedMeal: loggedLunch) {
+                                print("📱 Tapping logged lunch (YesView): \(loggedLunch.mealName)")
+                                DispatchQueue.main.async {
+                                    selectedLoggedMeal = loggedLunch
+                                    print("📱 Lunch YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                                }
+                            }
+                        }
+
+                        if let loggedDinner = loggedDinner {
+                            LoggedMealCard(loggedMeal: loggedDinner) {
+                                print("📱 Tapping logged dinner (YesView): \(loggedDinner.mealName)")
+                                DispatchQueue.main.async {
+                                    selectedLoggedMeal = loggedDinner
+                                    print("📱 Dinner YesView UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                                }
+                            }
+                        }
+
+                        // Extra logged meals for the selected date (only meals without specific meal types)
+                        if !extraLoggedMealsForDate.isEmpty {
+                            ForEach(extraLoggedMealsForDate) { loggedMeal in
+                                LoggedMealCard(loggedMeal: loggedMeal) {
+                                    print("📱 Tapping extra logged meal: \(loggedMeal.mealName)")
+                                    print("📱 Setting selectedLoggedMeal to: \(loggedMeal.id)")
+
+                                    // Ensure UI update happens on main thread
+                                    DispatchQueue.main.async {
+                                        selectedLoggedMeal = loggedMeal
+                                        print("📱 UI updated - selectedLoggedMeal set: \(String(describing: selectedLoggedMeal?.id))")
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Placeholder when no meals are logged
+                        VStack(spacing: 12) {
+                            Image(systemName: "fork.knife.circle")
+                                .font(.system(size: 50))
+                                .foregroundColor(.gray.opacity(0.4))
+
+                            Text("No meals logged today")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+
+                            Text("Press the + button to log meals or log meals directly from the meal plan")
+                                .font(.subheadline)
+                                .foregroundColor(.gray.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 60)
+                    }
+
+                    // Exercise cards for the selected date
+                    let exercisesForDate = exerciseService.getExercisesForDate(selectedDate)
+                    if !exercisesForDate.isEmpty {
+                        ForEach(exercisesForDate) { exercise in
+                            exerciseCard(exercise: exercise)
                         }
                     }
                 }
@@ -732,19 +807,36 @@ struct HomeView: View {
     // MARK: - Add Meal Button
     private func addMealButton(mealType: String, icon: String, color: Color) -> some View {
         Button(action: {
-            // Track meal button tap in Mixpanel
-            MixpanelService.shared.track(
-                event: MixpanelService.Events.mealButtonTapped,
-                properties: [
-                    MixpanelService.Properties.mealType: mealType.lowercased(),
-                    MixpanelService.Properties.source: "home_screen"
-                ]
-            )
-            
             // Check if we're in NoView (no meals and no weekly preference)
             let hasNoMeals = selectedBreakfastMeal == nil && selectedLunchMeal == nil && selectedDayMeal == nil
             let isNoView = hasNoMeals && !appState.hasWeeklyMealPlanPreference(for: selectedDate)
-            
+
+            // Determine if this is photo mode or meal plan mode
+            let isPhotoMode = isNoView || (appState.getWeeklyMealPlanPreference(for: selectedDate) == false)
+
+            // Track meal button tap in Mixpanel with specific event for photo mode
+            if isPhotoMode {
+                // Track with specific photo button events
+                MixpanelService.shared.track(
+                    event: "\(mealType.lowercased())_photo_pressed",
+                    properties: [
+                        "meal_type": mealType.lowercased(),
+                        "source": "home_screen",
+                        "mode": "photo_logging"
+                    ]
+                )
+            } else {
+                // Track regular meal plan button tap
+                MixpanelService.shared.track(
+                    event: MixpanelService.Events.mealButtonTapped,
+                    properties: [
+                        MixpanelService.Properties.mealType: mealType.lowercased(),
+                        MixpanelService.Properties.source: "home_screen",
+                        "mode": "meal_plan"
+                    ]
+                )
+            }
+
             if isNoView {
                 // NoView: Use camera flow for meal logging
                 // Check if this meal type already exists for today
@@ -753,7 +845,7 @@ struct HomeView: View {
                     print("⚠️ Already have a \(mealType.lowercased()) logged for today")
                     return
                 }
-                
+
                 // Set pending meal type and open camera
                 pendingMealType = mealType.lowercased()
                 showingCameraForMeal = true
@@ -762,7 +854,16 @@ struct HomeView: View {
                 if let weeklyPreference = appState.getWeeklyMealPlanPreference(for: selectedDate) {
                     if !weeklyPreference {
                         // User chose "No" - photo logging
-                        appState.openDeviceCamera()
+                        // Check if this meal type already exists for today
+                        if loggedMealService.hasLoggedMealForDateAndType(selectedDate, mealType: mealType.lowercased()) {
+                            // Already have a meal of this type for today - do nothing
+                            print("⚠️ Already have a \(mealType.lowercased()) logged for today")
+                            return
+                        }
+
+                        // Set pending meal type and open camera
+                        pendingMealType = mealType.lowercased()
+                        showingCameraForMeal = true
                     } else {
                         // User chose "Yes" - meal plan creation
                         if mealType == "Breakfast" {
@@ -837,7 +938,123 @@ struct HomeView: View {
         }
         return "plus.circle"
     }
-    
+
+    // MARK: - Floating Plus Button
+    private var floatingPlusButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button(action: {
+                    withAnimation(.spring(response: 0.3)) {
+                        showingQuickActionPopup.toggle()
+                    }
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 56, height: 56)
+                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+
+                        Image(systemName: showingQuickActionPopup ? "xmark" : "plus")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.white)
+                            .rotationEffect(.degrees(showingQuickActionPopup ? 90 : 0))
+                    }
+                }
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
+            }
+        }
+    }
+
+    // MARK: - Quick Action Popup
+    private var quickActionPopup: some View {
+        ZStack {
+            // Background overlay
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3)) {
+                        showingQuickActionPopup = false
+                    }
+                }
+
+            // Popup content
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        // Log Exercise Button
+                        Button(action: {
+                            showingQuickActionPopup = false
+                            showingExerciseLogging = true
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "figure.run")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.orange)
+                                    )
+
+                                Text("Log Exercise")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+
+                                Spacer()
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            )
+                        }
+
+                        // Log Meal Button
+                        Button(action: {
+                            showingQuickActionPopup = false
+                            showingCameraForMeal = true
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.blue)
+                                    )
+
+                                Text("Log Meal")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+
+                                Spacer()
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            )
+                        }
+                    }
+                    .frame(width: 250)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 100)
+                }
+            }
+        }
+        .transition(.opacity)
+    }
+
     // MARK: - Extra Meal Card
     private var extraMealCard: some View {
         Button(action: {
@@ -885,7 +1102,61 @@ struct HomeView: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
+    // MARK: - Exercise Card
+    private func exerciseCard(exercise: LoggedExercise) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                // Exercise icon
+                Image(systemName: "figure.run")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(Color.orange)
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Exercise Logged")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+
+                    Text(exercise.summary)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                // Calories burned
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(exercise.caloriesBurned)")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.orange)
+
+                    Text("cal burned")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.orange.opacity(0.3), lineWidth: 2)
+                )
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+    }
+
     // MARK: - Start Button
     private var startButton: some View {
         VStack(spacing: 20) {
@@ -999,38 +1270,11 @@ struct HomeView: View {
             remainingCaloriesForSelectedDay: max(remainingCaloriesForSelectedDay, 0),
             caloriesProgress: max(min(caloriesProgress, 1.0), 0.0),
             progressRingColor: progressRingColor,
-            userData: appState.userData
+            userData: appState.userData,
+            dailyMicronutrientGoals: dailyMicronutrientGoals,
+            consumedMicronutrients: consumedMicronutrients,
+            remainingMicronutrients: remainingMicronutrients
         )
-    }
-    
-    // MARK: - Action Buttons
-    private var actionButtons: some View {
-        VStack(spacing: 16) {
-            // Shopping list button (only show if there's a current meal plan)
-            if currentMealPlanId != nil {
-                        Button {
-                    showingShoppingList = true
-                        } label: {
-                            HStack {
-                        Image(systemName: "cart.fill")
-                            .font(.title3)
-                        Text("View Shopping List")
-                            .font(.headline)
-                                    .fontWeight(.semibold)
-                            }
-                            .foregroundColor(.green)
-                            .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                            .background(
-                        RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.green, lineWidth: 2)
-                            .background(Color("AppBackground"))
-                    )
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
     }
     
     // MARK: - Helper Properties
@@ -1043,9 +1287,13 @@ struct HomeView: View {
             // Return a reasonable default if user data is incomplete
             return 2000
         }
-        
-        let calories = CalorieCalculationService.shared.calculateDailyCalorieGoal(for: appState.userData)
-        return max(calories, 1200) // Ensure minimum safe value
+
+        let baseCalories = CalorieCalculationService.shared.calculateDailyCalorieGoal(for: appState.userData)
+
+        // Add exercise calories burned for the selected date
+        let exerciseCalories = ExerciseService.shared.getTotalCaloriesBurnedForDate(selectedDate)
+
+        return max(baseCalories + exerciseCalories, 1200) // Ensure minimum safe value
     }
     
     private var remainingCaloriesForSelectedDay: Int {
@@ -1092,7 +1340,63 @@ struct HomeView: View {
             return .red // Few calories remaining
         }
     }
-    
+
+    // MARK: - Micronutrient Properties
+
+    private var dailyMicronutrientGoals: (fiber: Double, sugar: Double, sodium: Double) {
+        guard appState.userData.age > 0,
+              appState.userData.weight > 0,
+              appState.userData.height > 0 else {
+            // Return reasonable defaults if user data is incomplete
+            return (fiber: 25.0, sugar: 50.0, sodium: 2300.0)
+        }
+        return CalorieCalculationService.shared.calculateDailyMicronutrientGoals(for: appState.userData)
+    }
+
+    private var consumedMicronutrients: (fiber: Double, sugar: Double, sodium: Double) {
+        var totalFiber = 0.0
+        var totalSugar = 0.0
+        var totalSodium = 0.0
+
+        // Get completed meals for the selected date
+        let normalizedDate = normalizeDate(selectedDate)
+        let mealsForDate = streakService.weekCompletions[normalizedDate] ?? []
+
+        // Calculate consumed micronutrients from completed planned meals
+        for mealInstance in mealsForDate {
+            if mealInstance.completion == .ateExact {
+                // User ate the exact planned meal - use planned meal macros
+                if let meal = getMealForType(mealInstance.mealType),
+                   let macros = meal.macros {
+                    totalFiber += macros.fiber
+                    totalSugar += macros.sugar
+                    totalSodium += macros.sodium
+                }
+            }
+        }
+
+        // Add micronutrients from logged meals
+        let loggedMeals = loggedMealService.getLoggedMealsForDate(selectedDate)
+        for loggedMeal in loggedMeals {
+            totalFiber += loggedMeal.macros.fiber
+            totalSugar += loggedMeal.macros.sugar
+            totalSodium += loggedMeal.macros.sodium
+        }
+
+        return (fiber: totalFiber, sugar: totalSugar, sodium: totalSodium)
+    }
+
+    private var remainingMicronutrients: (fiber: Double, sugar: Double, sodium: Double) {
+        let goals = dailyMicronutrientGoals
+        let consumed = consumedMicronutrients
+
+        return (
+            fiber: max(0, goals.fiber - consumed.fiber),
+            sugar: max(0, goals.sugar - consumed.sugar),
+            sodium: max(0, goals.sodium - consumed.sodium)
+        )
+    }
+
     private var weekDays: [Date] {
         var calendar = Calendar.current
         calendar.firstWeekday = 1 // Ensure Sunday is the first day (1 = Sunday)
@@ -1184,7 +1488,7 @@ struct HomeView: View {
             }
             
             // Navigation arrow
-            NavigationLink(destination: MealDetailView(dayMeal: dayMeal, mealType: mealType).environmentObject(appState)) {
+            NavigationLink(destination: MealDetailView(dayMeal: dayMeal, mealType: mealType, selectedDate: selectedDate).environmentObject(appState)) {
                 Image(systemName: "chevron.right")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -2006,11 +2310,11 @@ struct HomeView: View {
     // MARK: - Meal Analysis
     private func analyzeMealImage(_ image: UIImage) {
         isAnalyzingMeal = true
-        
+
         Task {
             do {
                 let result = try await OpenAIService.shared.analyzeMealImage(image)
-                
+
                 await MainActor.run {
                     self.mealAnalysisResult = result
                     self.isAnalyzingMeal = false
@@ -2024,500 +2328,52 @@ struct HomeView: View {
             }
         }
     }
-    
-}
 
-// MARK: - Meal Detail View
-struct MealDetailView: View {
-    @State private var currentDayMeal: DayMeal
-    private let mealType: String
-    @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) private var dismiss
-    
-    private let databaseService = MealPlanDatabaseService.shared
-    @State private var dailyNutrition: DailyNutritionSummary?
-    @State private var isLoading = false
-    @State private var generatingRecipeForMealId: UUID? = nil
-    @State private var generatingImageForMealId: UUID? = nil
-    @StateObject private var openAIService = OpenAIService.shared
-    
-    init(dayMeal: DayMeal, mealType: String = "dinner") {
-        self._currentDayMeal = State(initialValue: dayMeal)
-        self.mealType = mealType
-    }
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Meal Header
-                mealHeader
-                
-                // Daily Nutrition Goal Section  
-                dailyNutritionSection
-                
-                // Meal Image Section
-                mealImageSection
-                
-                // Basic Stats
-                basicStatsSection
-                
-                // View Recipes Button
-                viewRecipesSection
-                
-                // Ingredients Section
-                ingredientsSection
-                
-                // Bottom spacing
-                Color.clear.frame(height: 20)
-            }
-            .padding(.horizontal, 20)
-        }
-        .navigationTitle(currentDayMeal.meal.name)
-        .navigationBarTitleDisplayMode(.large)
-        .navigationBarBackButtonHidden(false)
-        .onAppear {
-            loadDailyNutrition()
-        }
-    }
-    
-    // MARK: - Meal Header
-    private var mealHeader: some View {
-        VStack(spacing: 16) {
-                            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(currentDayMeal.meal.name)
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    
-                    Text("Today's \(mealType.capitalized)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(currentDayMeal.meal.calories) cal")
-                                    .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.orange)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.caption)
-                        Text("\(currentDayMeal.meal.cookTime) min")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.secondary)
-                }
-            }
-            
-            Text(currentDayMeal.meal.description)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.leading)
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-        )
-    }
-    
-    // MARK: - Daily Nutrition Section
-    private var dailyNutritionSection: some View {
-        Group {
-            // Daily Nutritional Breakdown
-            if let macros = currentDayMeal.meal.macros {
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Daily Nutritional Breakdown")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                    }
-                    
-                    CompactMacrosView(macros: macros)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                        )
-                )
-            }
-        }
-    }
-    
-    // MARK: - Meal Image Section
-    private var mealImageSection: some View {
-        VStack(spacing: 16) {
-            if let imageUrl = currentDayMeal.meal.imageUrl, !imageUrl.isEmpty {
-                AsyncImage(url: URL(string: imageUrl)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 200)
-                        .clipped()
-                        .cornerRadius(12)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 200)
-                        .cornerRadius(12)
-                        .overlay(
-                            ProgressView()
-                                .tint(.gray)
-                        )
-                }
-            } else {
-                // View Image Button (only show when no image exists)
-                Button {
-                    generateMealImage(for: currentDayMeal)
-                } label: {
-                    HStack {
-                        if generatingImageForMealId == currentDayMeal.meal.id {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                            Text("Generating...")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        } else {
-                            Image(systemName: "photo.fill")
-                                .font(.subheadline)
-                            Text("View Image")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue)
-                    )
-                }
-                .disabled(generatingImageForMealId == currentDayMeal.meal.id)
-                .padding(.top, 12)
-            }
-        }
-    }
-    
-    // MARK: - Basic Stats Section
-    private var basicStatsSection: some View {
-        HStack(spacing: 20) {
-            Label("\(currentDayMeal.meal.cookTime) min", systemImage: "clock.fill")
-                .font(.subheadline)
-                .foregroundColor(.blue)
-            
-            if let originalDay = currentDayMeal.meal.originalCookingDay {
-                Label("From \(originalDay)", systemImage: "arrow.clockwise")
-                    .font(.subheadline)
-                    .foregroundColor(.green)
-            }
-                    
-                    Spacer()
-        }
-    }
-                    
-    // MARK: - View Recipes Section
-    private var viewRecipesSection: some View {
-                    VStack(spacing: 12) {
-            let hasRecipe = hasDetailedRecipe(currentDayMeal.meal)
-            
-            if hasRecipe {
-                NavigationLink(destination: MealDetailedRecipeView(dayMeal: currentDayMeal)) {
-                    HStack {
-                        Image(systemName: "book.fill")
-                        Text("View Recipes")
-                    }
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [.green, .mint],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
-                }
-            } else {
-                Button {
-                    generateDetailedRecipe(for: currentDayMeal)
-                } label: {
-                    HStack {
-                        if generatingRecipeForMealId == currentDayMeal.meal.id {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                            Text("Generating...")
-                        } else {
-                            Image(systemName: "fork.knife")
-                            Text("View Recipes")
-                        }
-                    }
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [.green, .mint],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
-                }
-                .disabled(generatingRecipeForMealId == currentDayMeal.meal.id)
-            }
-        }
-    }
-    
-    // MARK: - Ingredients Section
-    private var ingredientsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "list.bullet")
-                    .foregroundColor(.green)
-                Text("Ingredients")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                Spacer()
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(currentDayMeal.meal.ingredients, id: \.self) { ingredient in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("•")
-                            .foregroundColor(.green)
-                            .fontWeight(.bold)
-                        Text(ingredient)
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray6).opacity(0.5))
-        )
-    }
-    
-    // MARK: - Helper Methods
-    private func loadDailyNutrition() {
-        isLoading = true
-        
+    // MARK: - Analyze and Log Exercise
+    private func analyzeAndLogExercise() {
+        guard !exerciseDescription.isEmpty else { return }
+
+        print("🏃 Starting exercise analysis...")
+
         Task {
             do {
-                let nutrition = try await calculateDailyNutrition()
+                // Analyze the exercise description
+                let analysisResult = try await ExerciseService.shared.analyzeExercise(description: exerciseDescription)
+
                 await MainActor.run {
-                    dailyNutrition = nutrition
-                    isLoading = false
+                    // Log the exercise
+                    ExerciseService.shared.logExercise(from: analysisResult, loggedDate: selectedDate)
+
+                    // Clear the description
+                    exerciseDescription = ""
+
+                    // Close the sheet
+                    showingExerciseLogging = false
+
+                    print("✅ Exercise logged successfully!")
+                }
+
+                // Wait a moment for the database operation to complete
+                try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+                await MainActor.run {
+                    // Refresh exercises to ensure UI updates
+                    exerciseService.refreshExercises()
+
+                    // Reload daily nutrition to include exercise calories
+                    loadDailyNutrition()
+
+                    print("✅ UI refreshed with new exercise data!")
                 }
             } catch {
                 await MainActor.run {
-                    dailyNutrition = DailyNutritionSummary.placeholder
-                    isLoading = false
-                    print("❌ Error loading daily nutrition: \(error)")
+                    print("❌ Error analyzing exercise: \(error)")
+                    // TODO: Show error alert to user
                 }
             }
         }
     }
-    
-    private func calculateDailyNutrition() async throws -> DailyNutritionSummary {
-        // Calculate user's daily calorie goal based on their stats
-        let dailyCalorieGoal = calculateDailyCalorieGoal(userData: appState.userData)
-        
-        // For now, we'll use placeholder logic for consumed calories
-        var consumedCalories = 0
-        var consumedProtein = 0.0
-        var consumedCarbs = 0.0
-        var consumedFat = 0.0
-        
-        let caloriesLeft = max(0, dailyCalorieGoal - consumedCalories)
-        let proteinLeft = max(0.0, Double(dailyCalorieGoal) * 0.3 / 4 - consumedProtein) // 30% of calories from protein
-        let carbsLeft = max(0.0, Double(dailyCalorieGoal) * 0.4 / 4 - consumedCarbs) // 40% from carbs
-        let fatLeft = max(0.0, Double(dailyCalorieGoal) * 0.3 / 9 - consumedFat) // 30% from fat
-        
-        let progress = Double(consumedCalories) / Double(dailyCalorieGoal)
-        
-        return DailyNutritionSummary(
-            caloriesLeft: caloriesLeft,
-            proteinLeft: Int(proteinLeft),
-            carbsLeft: Int(carbsLeft),
-            fatLeft: Int(fatLeft),
-            caloriesProgress: min(1.0, progress)
-        )
-    }
-    
-    // Calculate daily calorie goal using Mifflin-St Jeor Equation
-    private func calculateDailyCalorieGoal(userData: UserOnboardingData) -> Int {
-        // If user data is incomplete, return a default value
-        guard userData.weight > 0, userData.height > 0, userData.age > 0 else {
-            return 2000 // Default calorie goal
-        }
-        
-        let weightInKg = userData.weight
-        let heightInCm = Double(userData.height)
-        let age = Double(userData.age)
-        
-        // Using male formula as default (can be updated when gender is added to model)
-        let bmr = (10 * weightInKg) + (6.25 * heightInCm) - (5 * age) + 5
-        
-        // Apply activity level multiplier
-        let activityMultiplier: Double = {
-            switch userData.activityLevel {
-            case .sedentary: return 1.2
-            case .lightlyActive: return 1.375
-            case .moderatelyActive: return 1.55
-            case .veryActive: return 1.725
-            case .extremelyActive: return 1.9
-            }
-        }()
-        
-        let dailyCalories = bmr * activityMultiplier
-        
-        // Adjust based on health goals
-        let adjustedCalories: Double = {
-            if userData.healthGoals.contains(.loseWeight) {
-                return dailyCalories - 500 // 500 calorie deficit for weight loss
-            } else if userData.healthGoals.contains(.gainWeight) {
-                return dailyCalories + 500 // 500 calorie surplus for weight gain
-            } else {
-                return dailyCalories // Maintenance calories
-            }
-        }()
-        
-        return Int(adjustedCalories)
-    }
-    
-    private func hasDetailedRecipe(_ meal: Meal) -> Bool {
-        // Check if we have the essential detailed recipe components
-        let hasIngredients = meal.detailedIngredients != nil && !meal.detailedIngredients!.isEmpty
-        let hasInstructions = meal.detailedInstructions != nil && !meal.detailedInstructions!.isEmpty
-        
-        return hasIngredients && hasInstructions
-    }
-    
-    private func generateDetailedRecipe(for dayMeal: DayMeal) {
-        Task {
-            await MainActor.run {
-                generatingRecipeForMealId = dayMeal.meal.id
-            }
-            
-            do {
-                let detailedRecipe = try await openAIService.generateDetailedRecipe(
-                    for: dayMeal,
-                    userData: appState.userData
-                )
-                
-                // Update the meal in the database
-                try await databaseService.updateMealDetailedRecipe(
-                    mealId: dayMeal.meal.id, 
-                    detailedRecipe: detailedRecipe
-                )
-                
-                await MainActor.run {
-                    // Update local state with the new recipe data
-                    let updatedMeal = Meal(
-                        id: currentDayMeal.meal.id,
-                        name: currentDayMeal.meal.name,
-                        description: currentDayMeal.meal.description,
-                        calories: currentDayMeal.meal.calories,
-                        cookTime: currentDayMeal.meal.cookTime,
-                        ingredients: currentDayMeal.meal.ingredients,
-                        instructions: currentDayMeal.meal.instructions,
-                        originalCookingDay: currentDayMeal.meal.originalCookingDay,
-                        imageUrl: currentDayMeal.meal.imageUrl,
-                        recommendedCaloriesBeforeDinner: currentDayMeal.meal.recommendedCaloriesBeforeDinner,
-                        macros: currentDayMeal.meal.macros,
-                        detailedIngredients: detailedRecipe.detailedIngredients, // New detailed recipe
-                        detailedInstructions: detailedRecipe.instructions, // New detailed recipe
-                        cookingTips: detailedRecipe.cookingTips, // New detailed recipe
-                        servingInfo: detailedRecipe.servingInfo // New detailed recipe
-                    )
-                    
-                    currentDayMeal = DayMeal(day: currentDayMeal.day, meal: updatedMeal)
-                    generatingRecipeForMealId = nil
-                    print("✅ Local state updated with new detailed recipe")
-                }
-                
-            } catch {
-                await MainActor.run {
-                    generatingRecipeForMealId = nil
-                }
-                print("❌ Error generating detailed recipe: \(error)")
-            }
-        }
-    }
-    
-    private func generateMealImage(for dayMeal: DayMeal) {
-        Task {
-            await MainActor.run {
-                generatingImageForMealId = dayMeal.meal.id
-            }
-            
-            do {
-                let imageUrl = try await openAIService.generateMealImage(for: dayMeal.meal)
-                
-                // Update the meal in the database
-                try await databaseService.updateMealImage(mealId: dayMeal.meal.id, imageUrl: imageUrl)
-                
-                await MainActor.run {
-                    // Update local state with the new image URL
-                    let updatedMeal = Meal(
-                        id: currentDayMeal.meal.id,
-                        name: currentDayMeal.meal.name,
-                        description: currentDayMeal.meal.description,
-                        calories: currentDayMeal.meal.calories,
-                        cookTime: currentDayMeal.meal.cookTime,
-                        ingredients: currentDayMeal.meal.ingredients,
-                        instructions: currentDayMeal.meal.instructions,
-                        originalCookingDay: currentDayMeal.meal.originalCookingDay,
-                        imageUrl: imageUrl, // New image URL
-                        recommendedCaloriesBeforeDinner: currentDayMeal.meal.recommendedCaloriesBeforeDinner,
-                        macros: currentDayMeal.meal.macros,
-                        detailedIngredients: currentDayMeal.meal.detailedIngredients,
-                        detailedInstructions: currentDayMeal.meal.detailedInstructions,
-                        cookingTips: currentDayMeal.meal.cookingTips,
-                        servingInfo: currentDayMeal.meal.servingInfo
-                    )
-                    
-                    currentDayMeal = DayMeal(day: currentDayMeal.day, meal: updatedMeal)
-                    generatingImageForMealId = nil
-                    print("✅ Local state updated with new image URL")
-                }
-                
-            } catch {
-                await MainActor.run {
-                    generatingImageForMealId = nil
-                }
-                print("❌ Error generating meal image: \(error)")
-            }
-        }
-    }
-    
+
 }
 
 // MARK: - Settings View
@@ -3368,7 +3224,10 @@ struct SwipeableNutritionCard: View {
     let caloriesProgress: Double
     let progressRingColor: Color
     let userData: UserOnboardingData
-    
+    let dailyMicronutrientGoals: (fiber: Double, sugar: Double, sodium: Double)
+    let consumedMicronutrients: (fiber: Double, sugar: Double, sodium: Double)
+    let remainingMicronutrients: (fiber: Double, sugar: Double, sodium: Double)
+
     @State private var currentPage = 0
     @State private var dragOffset: CGFloat = 0
     
@@ -3378,9 +3237,13 @@ struct SwipeableNutritionCard: View {
                 // Page 1: Calories
                 caloriesView
                     .frame(width: geometry.size.width)
-                
+
                 // Page 2: Macros
                 macrosView
+                    .frame(width: geometry.size.width)
+
+                // Page 3: Micronutrients
+                micronutrientsView
                     .frame(width: geometry.size.width)
             }
             .offset(x: -CGFloat(currentPage) * geometry.size.width + dragOffset)
@@ -3394,21 +3257,21 @@ struct SwipeableNutritionCard: View {
                     .onEnded { value in
                         let threshold: CGFloat = 50
                         let velocity = value.velocity.width
-                        
+
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                             if value.translation.width > threshold || velocity > 500 {
                                 // Swipe right - go to previous page
                                 currentPage = max(0, currentPage - 1)
                             } else if value.translation.width < -threshold || velocity < -500 {
                                 // Swipe left - go to next page
-                                currentPage = min(1, currentPage + 1)
+                                currentPage = min(2, currentPage + 1)
                             }
                             dragOffset = 0
                         }
                     }
             )
         }
-        .frame(minHeight: 180)
+        .frame(minHeight: 220)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(.systemBackground))
@@ -3417,7 +3280,7 @@ struct SwipeableNutritionCard: View {
         .overlay(
             // Page indicators
             HStack(spacing: 8) {
-                ForEach(0..<2, id: \.self) { index in
+                ForEach(0..<3, id: \.self) { index in
                     Circle()
                         .fill(currentPage == index ? Color.primary : Color.primary.opacity(0.3))
                         .frame(width: 6, height: 6)
@@ -3563,6 +3426,95 @@ struct SwipeableNutritionCard: View {
             return max(Int(fatGrams), 25) // Minimum 25g fats
         }
         return max(plan.dailyFats, 25)
+    }
+
+    // MARK: - Micronutrients View (Page 3)
+    private var micronutrientsView: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Daily Micronutrients")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+
+                Spacer()
+
+                Image(systemName: "sparkles")
+                    .font(.title2)
+                    .foregroundColor(.purple)
+            }
+
+            VStack(spacing: 10) {
+                // Fiber
+                micronutrientRow(
+                    icon: "leaf.circle.fill",
+                    name: "Fiber",
+                    remaining: remainingMicronutrients.fiber,
+                    goal: dailyMicronutrientGoals.fiber,
+                    unit: "g",
+                    color: .green
+                )
+
+                Divider()
+
+                // Sugar
+                micronutrientRow(
+                    icon: "cube.fill",
+                    name: "Sugar",
+                    remaining: remainingMicronutrients.sugar,
+                    goal: dailyMicronutrientGoals.sugar,
+                    unit: "g",
+                    color: .pink
+                )
+
+                Divider()
+
+                // Sodium
+                micronutrientRow(
+                    icon: "drop.triangle.fill",
+                    name: "Sodium",
+                    remaining: remainingMicronutrients.sodium,
+                    goal: dailyMicronutrientGoals.sodium,
+                    unit: "mg",
+                    color: .cyan
+                )
+            }
+        }
+        .padding(20)
+    }
+
+    // MARK: - Micronutrient Row Component
+    private func micronutrientRow(icon: String, name: String, remaining: Double, goal: Double, unit: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(color)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                Text("\(Int(remaining))/\(Int(goal)) \(unit) left")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Progress indicator
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(color.opacity(0.2))
+                    .frame(width: 60, height: 8)
+
+                let progress = goal > 0 ? max(0, min(1.0, remaining / goal)) : 0
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(color)
+                    .frame(width: 60 * CGFloat(progress), height: 8)
+            }
+        }
     }
 }
 

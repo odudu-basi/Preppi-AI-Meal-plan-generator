@@ -13,10 +13,25 @@ struct MealAnalysisResultView: View {
     let onDone: () -> Void
     let onAddDetails: () -> Void
     let onLogMeal: () -> Void
-    
+    let onRefinedAnalysis: (MealAnalysisResult) -> Void
+
     @State private var animateContent = false
     @State private var animateImage = false
-    
+    @State private var showingDetailsSheet = false
+    @State private var isRefining = false
+    @State private var currentAnalysis: MealAnalysisResult
+    @State private var showingShareSheet = false
+
+    init(mealImage: UIImage, analysisResult: MealAnalysisResult, onDone: @escaping () -> Void, onAddDetails: @escaping () -> Void, onLogMeal: @escaping () -> Void, onRefinedAnalysis: @escaping (MealAnalysisResult) -> Void) {
+        self.mealImage = mealImage
+        self.analysisResult = analysisResult
+        self.onDone = onDone
+        self.onAddDetails = onAddDetails
+        self.onLogMeal = onLogMeal
+        self.onRefinedAnalysis = onRefinedAnalysis
+        self._currentAnalysis = State(initialValue: analysisResult)
+    }
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -38,11 +53,11 @@ struct MealAnalysisResultView: View {
                             .foregroundColor(.secondary)
                         
                         Spacer()
-                        
+
                         Button(action: {
-                            // Bookmark functionality placeholder
+                            showingShareSheet = true
                         }) {
-                            Image(systemName: "bookmark")
+                            Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(.gray)
                                 .frame(width: 32, height: 32)
@@ -53,7 +68,7 @@ struct MealAnalysisResultView: View {
                     .padding(.top, 10)
                     
                     // Meal name
-                    Text(analysisResult.mealName)
+                    Text(currentAnalysis.mealName)
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
@@ -105,7 +120,7 @@ struct MealAnalysisResultView: View {
                     }
                     
                     // Description section
-                    Text(analysisResult.description)
+                    Text(currentAnalysis.description)
                         .font(.system(size: 16, weight: .regular))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -118,13 +133,13 @@ struct MealAnalysisResultView: View {
                             Image(systemName: "flame.fill")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundColor(.orange)
-                            
+
                             Text("Calories")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
-                        
-                        Text("\(analysisResult.calories)")
+
+                        Text("\(currentAnalysis.calories)")
                             .font(.system(size: 48, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
                     }
@@ -144,23 +159,23 @@ struct MealAnalysisResultView: View {
                         MacroColumn(
                             icon: "person.fill",
                             title: "Protein",
-                            value: "\(Int(analysisResult.macros.protein))g",
+                            value: "\(Int(currentAnalysis.macros.protein))g",
                             color: .red
                         )
-                        
+
                         // Carbs
                         MacroColumn(
                             icon: "leaf.fill",
                             title: "Carbs",
-                            value: "\(Int(analysisResult.macros.carbohydrates))g",
+                            value: "\(Int(currentAnalysis.macros.carbohydrates))g",
                             color: .blue
                         )
-                        
+
                         // Fats
                         MacroColumn(
                             icon: "drop.fill",
                             title: "Fats",
-                            value: "\(Int(analysisResult.macros.fat))g",
+                            value: "\(Int(currentAnalysis.macros.fat))g",
                             color: .orange
                         )
                     }
@@ -173,32 +188,82 @@ struct MealAnalysisResultView: View {
                     .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 3)
                     .opacity(animateContent ? 1.0 : 0.0)
                     .offset(y: animateContent ? 0 : 30)
-                    
+
+                    // Micronutrients section
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.purple)
+
+                            Text("Micronutrients")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            Spacer()
+                        }
+
+                        HStack(spacing: 12) {
+                            // Fiber
+                            MacroColumn(
+                                icon: "leaf.circle.fill",
+                                title: "Fiber",
+                                value: "\(Int(currentAnalysis.macros.fiber))g",
+                                color: .green
+                            )
+
+                            // Sugar
+                            MacroColumn(
+                                icon: "cube.fill",
+                                title: "Sugar",
+                                value: "\(Int(currentAnalysis.macros.sugar))g",
+                                color: .pink
+                            )
+
+                            // Sodium
+                            MacroColumn(
+                                icon: "drop.triangle.fill",
+                                title: "Sodium",
+                                value: "\(Int(currentAnalysis.macros.sodium))mg",
+                                color: .cyan
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 3)
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    .offset(y: animateContent ? 0 : 40)
+
                     // Health Score section
                     VStack(spacing: 12) {
                         HStack {
                             Image(systemName: "heart.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.pink)
-                            
+
                             Text("Preppi Score")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.primary)
-                            
+
                             Spacer()
-                            
-                            Text("\(analysisResult.healthScore)/10")
+
+                            Text("\(currentAnalysis.healthScore)/10")
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.primary)
                         }
-                        
+
                         // Health score progress bar
                         GeometryReader { geometry in
                             ZStack(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(Color(.systemGray5))
                                     .frame(height: 8)
-                                
+
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(
                                         LinearGradient(
@@ -207,7 +272,7 @@ struct MealAnalysisResultView: View {
                                             endPoint: .trailing
                                         )
                                     )
-                                    .frame(width: geometry.size.width * (Double(analysisResult.healthScore) / 10.0), height: 8)
+                                    .frame(width: geometry.size.width * (Double(currentAnalysis.healthScore) / 10.0), height: 8)
                                     .animation(.easeInOut(duration: 1.0), value: animateContent)
                             }
                         }
@@ -229,11 +294,14 @@ struct MealAnalysisResultView: View {
                     // Action buttons at bottom
                     VStack(spacing: 16) {
                         // Add Details button
-                        Button(action: onAddDetails) {
+                        Button(action: {
+                            showingDetailsSheet = true
+                            onAddDetails()
+                        }) {
                             HStack(spacing: 8) {
                                 Image(systemName: "wand.and.stars")
                                     .font(.system(size: 16, weight: .medium))
-                                
+
                                 Text("Add Details")
                                     .font(.system(size: 16, weight: .semibold))
                             }
@@ -290,15 +358,84 @@ struct MealAnalysisResultView: View {
             .navigationBarHidden(true)
             .background(Color(.systemBackground))
         }
+        .sheet(isPresented: $showingDetailsSheet) {
+            MealDetailsInputView(
+                mealImage: mealImage,
+                currentAnalysis: currentAnalysis,
+                onRefine: { additionalDetails in
+                    Task {
+                        isRefining = true
+                        showingDetailsSheet = false
+
+                        do {
+                            let refinedAnalysis = try await OpenAIService.shared.refineMealAnalysis(
+                                mealImage,
+                                currentAnalysis: currentAnalysis,
+                                additionalDetails: additionalDetails
+                            )
+
+                            await MainActor.run {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    currentAnalysis = refinedAnalysis
+                                }
+                                onRefinedAnalysis(refinedAnalysis)
+                                isRefining = false
+                            }
+                        } catch {
+                            print("❌ Error refining meal analysis: \(error)")
+                            await MainActor.run {
+                                isRefining = false
+                            }
+                        }
+                    }
+                },
+                onCancel: {
+                    showingDetailsSheet = false
+                }
+            )
+        }
+        .overlay {
+            if isRefining {
+                AnalyzingFoodLoadingView()
+            }
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
                 animateImage = true
             }
-            
+
             withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
                 animateContent = true
             }
         }
+        .sheet(isPresented: $showingShareSheet) {
+            ShareSheet(items: [
+                generateShareText(),
+                mealImage
+            ])
+        }
+    }
+
+    // MARK: - Helper Functions
+    private func generateShareText() -> String {
+        var text = """
+        🍽️ \(currentAnalysis.mealName)
+
+        🔥 \(currentAnalysis.calories) calories
+
+        Macros:
+        💪 Protein: \(Int(currentAnalysis.macros.protein))g
+        🍞 Carbs: \(Int(currentAnalysis.macros.carbohydrates))g
+        🥑 Fats: \(Int(currentAnalysis.macros.fat))g
+        """
+
+        if !currentAnalysis.description.isEmpty {
+            text += "\n\n📝 \(currentAnalysis.description)"
+        }
+
+        text += "\n\n✨ Analyzed with Preppi AI"
+
+        return text
     }
 }
 
@@ -346,6 +483,7 @@ struct MacroColumn: View {
         ),
         onDone: {},
         onAddDetails: {},
-        onLogMeal: {}
+        onLogMeal: {},
+        onRefinedAnalysis: { _ in }
     )
 }

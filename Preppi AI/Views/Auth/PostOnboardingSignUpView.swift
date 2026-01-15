@@ -10,11 +10,12 @@ import SwiftUI
 struct PostOnboardingSignUpView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var authService = AuthService.shared
+    @State private var animateContent = false
+    @State private var showSignIn = false
+    @State private var showEmailSignUp = false
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
-    @State private var animateContent = false
-    @State private var showSignIn = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -75,28 +76,8 @@ struct PostOnboardingSignUpView: View {
                         .opacity(animateContent ? 1.0 : 0.0)
                         .offset(y: animateContent ? 0 : 20)
 
-                        // Form
+                        // Sign Up Options
                         VStack(spacing: 20) {
-                            // Email Field
-                            AuthTextField(
-                                title: "Email",
-                                text: $email,
-                                keyboardType: .emailAddress,
-                                systemImage: "envelope"
-                            )
-
-                            // Password Field
-                            AuthPasswordField(
-                                title: "Password",
-                                text: $password
-                            )
-
-                            // Confirm Password
-                            AuthPasswordField(
-                                title: "Confirm Password",
-                                text: $confirmPassword
-                            )
-
                             // Error Message
                             if let errorMessage = authService.errorMessage {
                                 Text(errorMessage)
@@ -106,16 +87,20 @@ struct PostOnboardingSignUpView: View {
                                     .padding(.horizontal)
                             }
 
-                            // Create Account Button
-                            Button(action: handleSignUp) {
-                                HStack {
+                            // Google Sign Up Button
+                            Button(action: handleGoogleSignUp) {
+                                HStack(spacing: 12) {
                                     if authService.isLoading {
                                         ProgressView()
                                             .scaleEffect(0.8)
                                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    } else {
+                                        Image(systemName: "g.circle.fill")
+                                            .font(.title2)
+                                            .foregroundColor(.white)
                                     }
 
-                                    Text("Create Account")
+                                    Text("Continue with Google")
                                         .font(.headline)
                                         .fontWeight(.semibold)
                                 }
@@ -125,14 +110,147 @@ struct PostOnboardingSignUpView: View {
                                 .background(
                                     RoundedRectangle(cornerRadius: 16)
                                         .fill(
-                                            isFormValid ?
-                                            LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing) :
-                                            LinearGradient(colors: [.gray], startPoint: .leading, endPoint: .trailing)
+                                            LinearGradient(colors: [.green, .mint], startPoint: .leading, endPoint: .trailing)
                                         )
-                                        .shadow(color: isFormValid ? .green.opacity(0.3) : .clear, radius: 12, x: 0, y: 6)
+                                        .shadow(color: .green.opacity(0.3), radius: 12, x: 0, y: 6)
                                 )
                             }
-                            .disabled(!isFormValid || authService.isLoading)
+                            .disabled(authService.isLoading)
+
+                            // Divider with text
+                            HStack {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(height: 1)
+
+                                Text("Quick & Secure")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 8)
+
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(height: 1)
+                            }
+                            .padding(.vertical, 5)
+
+                            // Collapsible Email/Password Section
+                            VStack(spacing: 16) {
+                                // Expand/Collapse Button
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        showEmailSignUp.toggle()
+                                    }
+                                }) {
+                                    HStack {
+                                        Text("Sign up without Google")
+                                            .font(.subheadline)
+                                            .foregroundColor(.green)
+
+                                        Spacer()
+
+                                        Image(systemName: showEmailSignUp ? "chevron.up" : "chevron.down")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemBackground))
+                                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                                    )
+                                }
+
+                                // Email/Password Fields (Collapsible)
+                                if showEmailSignUp {
+                                    VStack(spacing: 16) {
+                                        // Email Field
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Email")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+
+                                            TextField("Enter your email", text: $email)
+                                                .textFieldStyle(.plain)
+                                                .textContentType(.emailAddress)
+                                                .autocapitalization(.none)
+                                                .keyboardType(.emailAddress)
+                                                .padding()
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(Color(.systemGray6))
+                                                )
+                                        }
+
+                                        // Password Field
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Password")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+
+                                            SecureField("Enter your password", text: $password)
+                                                .textFieldStyle(.plain)
+                                                .textContentType(.newPassword)
+                                                .padding()
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(Color(.systemGray6))
+                                                )
+                                        }
+
+                                        // Confirm Password Field
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Confirm Password")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+
+                                            SecureField("Confirm your password", text: $confirmPassword)
+                                                .textFieldStyle(.plain)
+                                                .textContentType(.newPassword)
+                                                .padding()
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(Color(.systemGray6))
+                                                )
+                                        }
+
+                                        // Sign Up Button
+                                        Button(action: handleEmailSignUp) {
+                                            HStack {
+                                                if authService.isLoading {
+                                                    ProgressView()
+                                                        .scaleEffect(0.8)
+                                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                } else {
+                                                    Text("Sign Up")
+                                                        .font(.headline)
+                                                        .fontWeight(.semibold)
+                                                }
+                                            }
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 50)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(
+                                                        LinearGradient(
+                                                            colors: [.green, .mint],
+                                                            startPoint: .leading,
+                                                            endPoint: .trailing
+                                                        )
+                                                    )
+                                            )
+                                        }
+                                        .disabled(authService.isLoading || email.isEmpty || password.isEmpty || confirmPassword.isEmpty)
+                                        .opacity((email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? 0.6 : 1.0)
+                                    }
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+                            }
                         }
                         .padding(.horizontal, 30)
                         .opacity(animateContent ? 1.0 : 0.0)
@@ -162,7 +280,7 @@ struct PostOnboardingSignUpView: View {
             withAnimation(.easeOut(duration: 0.8)) {
                 animateContent = true
             }
-            
+
             // Debug: Check what onboarding data is available when signup screen appears
             print("🔍 PostOnboardingSignUpView appeared - checking available data:")
             print("   - User Name: \(appState.userData.name)")
@@ -172,55 +290,79 @@ struct PostOnboardingSignUpView: View {
             print("   - Weekly Budget: $\(appState.userData.weeklyBudget ?? 0)")
             print("   - needsSignUpAfterOnboarding: \(appState.needsSignUpAfterOnboarding)")
         }
-        .onTapGesture {
-            hideKeyboard()
-        }
-    }
-
-    // MARK: - Computed Properties
-
-    private var isFormValid: Bool {
-        let emailValid = email.contains("@") && email.contains(".")
-        let passwordValid = password.count >= 6
-        let passwordsMatch = password == confirmPassword
-        return emailValid && passwordValid && passwordsMatch
-    }
-
-    // MARK: - Actions
-
-    private func handleSignUp() {
-        authService.clearError()
-        hideKeyboard()
-
-        Task {
-            await authService.signUp(email: email, password: password)
-
-            // If signup successful, save the onboarding data to Supabase
-            if authService.isAuthenticated {
-                // Reset the signup flag BEFORE calling completeOnboarding so it actually saves
-                await MainActor.run {
-                    appState.needsSignUpAfterOnboarding = false
-                    print("🔄 Resetting needsSignUpAfterOnboarding flag before save")
-                }
-                
-                // The onboarding data is already stored in appState.userData
-                // Now we need to save it to Supabase with the new user's ID
-                await appState.completeOnboarding(with: appState.userData)
-
-                // Mark that we should show paywall next
-                await MainActor.run {
-                    appState.isOnboardingComplete = true
-                    print("✅ Post-onboarding signup completed - onboarding data saved to Supabase")
-                    print("   - Final AppState userData name: \(appState.userData.name)")
-                    print("   - Final AppState isOnboardingComplete: \(appState.isOnboardingComplete)")
-                    print("   - Final needsSignUpAfterOnboarding: \(appState.needsSignUpAfterOnboarding)")
+        .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                print("✅ User authenticated via Google - handling post-auth flow")
+                Task {
+                    await handlePostAuthFlow()
                 }
             }
         }
     }
 
-    private func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    // MARK: - Actions
+
+    private func handleGoogleSignUp() {
+        authService.clearError()
+
+        Task {
+            do {
+                try await authService.signInWithGoogle()
+
+                // The OAuth flow will handle the callback
+                // We'll handle the post-auth flow via the auth state listener
+                // Once authenticated, we need to save the onboarding data
+
+            } catch {
+                print("❌ Google sign-up error: \(error)")
+            }
+        }
+    }
+
+    private func handleEmailSignUp() {
+        authService.clearError()
+
+        // Validate passwords match
+        guard password == confirmPassword else {
+            authService.errorMessage = "Passwords do not match"
+            return
+        }
+
+        // Validate password length
+        guard password.count >= 6 else {
+            authService.errorMessage = "Password must be at least 6 characters"
+            return
+        }
+
+        Task {
+            await authService.signUp(email: email, password: password)
+
+            // If signup successful, the auth state listener will trigger handlePostAuthFlow
+        }
+    }
+
+    private func handlePostAuthFlow() async {
+        // If signup/signin successful, save the onboarding data to Supabase
+        if authService.isAuthenticated {
+            // Reset the signup flag BEFORE calling completeOnboarding so it actually saves
+            await MainActor.run {
+                appState.needsSignUpAfterOnboarding = false
+                print("🔄 Resetting needsSignUpAfterOnboarding flag before save")
+            }
+
+            // The onboarding data is already stored in appState.userData
+            // Now we need to save it to Supabase with the new user's ID
+            await appState.completeOnboarding(with: appState.userData)
+
+            // Mark that we should show paywall next
+            await MainActor.run {
+                appState.isOnboardingComplete = true
+                print("✅ Post-onboarding signup completed - onboarding data saved to Supabase")
+                print("   - Final AppState userData name: \(appState.userData.name)")
+                print("   - Final AppState isOnboardingComplete: \(appState.isOnboardingComplete)")
+                print("   - Final needsSignUpAfterOnboarding: \(appState.needsSignUpAfterOnboarding)")
+            }
+        }
     }
 }
 

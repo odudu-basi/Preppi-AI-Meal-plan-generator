@@ -29,6 +29,9 @@ final class AppState: ObservableObject {
     // NEW: Guest onboarding flow state
     @Published var isGuestOnboarding: Bool = false // True when user starts onboarding without auth
     @Published var needsSignUpAfterOnboarding: Bool = false // True after completing guest onboarding
+
+    // Meal Plan Flow Data
+    @Published var currentMealPlanFlowData: MealPlanFlowData? = nil // Current meal plan flow selections
     
     // MARK: - Services
     private let databaseService = LocalUserDataService.shared
@@ -44,6 +47,9 @@ final class AppState: ObservableObject {
         loadUserProfile()
         checkProAccess()
         loadWeeklyPreferences()
+        
+        // Load meal plan flow data if available
+        _ = loadMealPlanFlowData()
     }
     
     // MARK: - Setup Observers
@@ -502,7 +508,41 @@ final class AppState: ObservableObject {
             hasCompletedMealLoggingInfo = false
         }
     }
-    
+
+    // MARK: - Meal Plan Flow Data Management
+    func saveMealPlanFlowData(_ flowData: MealPlanFlowData) {
+        currentMealPlanFlowData = flowData
+
+        // Persist to UserDefaults
+        if let encoded = try? JSONEncoder().encode(flowData) {
+            UserDefaults.standard.set(encoded, forKey: "currentMealPlanFlowData")
+            print("✅ Meal plan flow data saved:")
+            print("   - Selected Days: \(flowData.selectedDays.count)")
+            print("   - Proteins: \(flowData.availableProteins.joined(separator: ", "))")
+            print("   - Carbs: \(flowData.availableCarbs.joined(separator: ", "))")
+            print("   - Fats: \(flowData.availableFats.joined(separator: ", "))")
+            print("   - Spices: \(flowData.availableSpices.joined(separator: ", "))")
+            print("   - Specific Requests: \(flowData.specificMealRequests)")
+        }
+    }
+
+    func loadMealPlanFlowData() -> MealPlanFlowData? {
+        if let data = UserDefaults.standard.data(forKey: "currentMealPlanFlowData"),
+           let decoded = try? JSONDecoder().decode(MealPlanFlowData.self, from: data) {
+            currentMealPlanFlowData = decoded
+            print("📦 Meal plan flow data loaded from storage")
+            return decoded
+        }
+        print("ℹ️ No saved meal plan flow data found")
+        return nil
+    }
+
+    func clearMealPlanFlowData() {
+        currentMealPlanFlowData = nil
+        UserDefaults.standard.removeObject(forKey: "currentMealPlanFlowData")
+        print("🗑️ Meal plan flow data cleared")
+    }
+
     // MARK: - Debug Methods
     func printUserInfo() {
         print("\n👤 Current User Info:")

@@ -106,7 +106,16 @@ struct MealPlanOnboardingView: View {
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedAnswer = true
-                            // TODO: Handle yes selection
+
+                            // Track Yes selection in Mixpanel
+                            MixpanelService.shared.track(
+                                event: "meal_plan_preference_selected",
+                                properties: [
+                                    "selection": "yes",
+                                    "source": "meal_plan_onboarding"
+                                ]
+                            )
+
                             print("User selected YES for meal plan assistance")
                         }
                     }
@@ -122,6 +131,16 @@ struct MealPlanOnboardingView: View {
                     ) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedAnswer = false
+
+                            // Track No selection in Mixpanel
+                            MixpanelService.shared.track(
+                                event: "meal_plan_preference_selected",
+                                properties: [
+                                    "selection": "no",
+                                    "source": "meal_plan_onboarding"
+                                ]
+                            )
+
                             print("User selected NO for meal plan assistance")
                         }
                     }

@@ -189,7 +189,8 @@ struct LoggedMeal: Identifiable, Codable {
     let loggedAt: Date
     let createdAt: Date
     let updatedAt: Date
-    
+    let isFromMealPlan: Bool? // Track if logged from meal plan (manual) vs photo
+
     // Local-only properties for UI
     var imageData: Data? // Temporary storage before upload
     
@@ -206,11 +207,37 @@ struct LoggedMeal: Identifiable, Codable {
         self.loggedAt = Date()
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.isFromMealPlan = false // Photo logging
         self.imageData = image?.jpegData(compressionQuality: 0.8)
     }
-    
+
+    // Initializer for logging meals from meal plan (manual)
+    init(from dayMeal: DayMeal, mealType: String, userId: UUID? = nil) {
+        self.id = UUID()
+        self.userId = userId
+        self.mealName = dayMeal.meal.name
+        self.description = dayMeal.meal.description
+        self.macros = Macros(
+            protein: dayMeal.meal.macros?.protein ?? 0,
+            carbohydrates: dayMeal.meal.macros?.carbohydrates ?? 0,
+            fat: dayMeal.meal.macros?.fat ?? 0,
+            fiber: dayMeal.meal.macros?.fiber ?? 0,
+            sugar: dayMeal.meal.macros?.sugar ?? 0,
+            sodium: dayMeal.meal.macros?.sodium ?? 0
+        )
+        self.calories = dayMeal.meal.calories
+        self.healthScore = 75 // Default health score
+        self.imageUrl = dayMeal.meal.imageUrl // Use meal plan image
+        self.mealType = mealType
+        self.loggedAt = Date()
+        self.createdAt = Date()
+        self.updatedAt = Date()
+        self.isFromMealPlan = true // Manual logging from meal plan
+        self.imageData = nil // No local image data for meal plan meals
+    }
+
     // Database initializer
-    init(id: UUID, userId: UUID?, mealName: String, description: String, macros: Macros, calories: Int, healthScore: Int, imageUrl: String?, mealType: String?, loggedAt: Date, createdAt: Date, updatedAt: Date) {
+    init(id: UUID, userId: UUID?, mealName: String, description: String, macros: Macros, calories: Int, healthScore: Int, imageUrl: String?, mealType: String?, loggedAt: Date, createdAt: Date, updatedAt: Date, isFromMealPlan: Bool? = nil) {
         self.id = id
         self.userId = userId
         self.mealName = mealName
@@ -223,6 +250,7 @@ struct LoggedMeal: Identifiable, Codable {
         self.loggedAt = loggedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.isFromMealPlan = isFromMealPlan
         self.imageData = nil
     }
     
@@ -248,10 +276,11 @@ struct DatabaseLoggedMeal: Codable {
     let healthScore: Int?
     let imageUrl: String?
     let mealType: String?
+    let isFromMealPlan: Bool?
     let loggedAt: String // ISO8601 string from database
     let createdAt: String
     let updatedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case id, calories
         case userId = "user_id"
@@ -260,6 +289,7 @@ struct DatabaseLoggedMeal: Codable {
         case healthScore = "health_score"
         case imageUrl = "image_url"
         case mealType = "meal_type"
+        case isFromMealPlan = "is_from_meal_plan"
         case loggedAt = "logged_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -267,7 +297,7 @@ struct DatabaseLoggedMeal: Codable {
     
     func toLoggedMeal() -> LoggedMeal {
         let dateFormatter = ISO8601DateFormatter()
-        
+
         return LoggedMeal(
             id: id,
             userId: userId,
@@ -287,7 +317,8 @@ struct DatabaseLoggedMeal: Codable {
             mealType: mealType,
             loggedAt: dateFormatter.date(from: loggedAt) ?? Date(),
             createdAt: dateFormatter.date(from: createdAt) ?? Date(),
-            updatedAt: dateFormatter.date(from: updatedAt) ?? Date()
+            updatedAt: dateFormatter.date(from: updatedAt) ?? Date(),
+            isFromMealPlan: isFromMealPlan
         )
     }
 }
@@ -307,8 +338,9 @@ struct MealInsertData: Codable {
     let healthScore: Int
     let imageUrl: String?
     let mealType: String?
+    let isFromMealPlan: Bool?
     let loggedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case mealName = "meal_name"
@@ -316,6 +348,7 @@ struct MealInsertData: Codable {
         case healthScore = "health_score"
         case imageUrl = "image_url"
         case mealType = "meal_type"
+        case isFromMealPlan = "is_from_meal_plan"
         case loggedAt = "logged_at"
     }
 }

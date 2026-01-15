@@ -480,7 +480,99 @@ class MealPlanDatabaseService {
             throw error
         }
     }
-    
+
+    /// Replace a meal in a meal plan for a specific date and meal type
+    func replaceMealInPlan(date: Date, mealType: String, newMeal: Meal) async throws {
+        print("🔄 Replacing \(mealType) meal for date: \(dateFormatter.string(from: date))")
+
+        guard let userId = try await getCurrentUserId() else {
+            throw DatabaseError.userNotAuthenticated
+        }
+
+        // 1. Find the meal plan for this week and meal type
+        let weekStart = getWeekStartDate(for: date)
+        let weekStartString = dateFormatter.string(from: weekStart)
+
+        let mealPlans: [DatabaseMealPlan] = try await supabase.database
+            .from("meal_plans")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .eq("week_start_date", value: weekStartString)
+            .eq("meal_plan_type", value: mealType)
+            .eq("is_active", value: true)
+            .execute()
+            .value
+
+        guard let mealPlan = mealPlans.first, let mealPlanId = mealPlan.id else {
+            print("❌ No meal plan found for week \(weekStartString) and type \(mealType)")
+            throw MealPlanDatabaseError.mealPlanNotFound
+        }
+
+        print("✅ Found meal plan: \(mealPlanId)")
+
+        // 2. Get the day name for this date
+        let dayName = getDayName(for: date)
+        print("📅 Day name: \(dayName)")
+
+        // 3. Create the new meal in the database
+        let databaseMeal = DatabaseMeal(
+            id: newMeal.id,
+            name: newMeal.name,
+            description: newMeal.description,
+            calories: newMeal.calories,
+            cookTime: newMeal.cookTime,
+            originalCookingDay: nil,
+            imageUrl: newMeal.imageUrl,
+            recommendedCaloriesBeforeDinner: 0,
+            protein: newMeal.macros?.protein,
+            carbohydrates: newMeal.macros?.carbohydrates,
+            fat: newMeal.macros?.fat,
+            fiber: newMeal.macros?.fiber,
+            sugar: newMeal.macros?.sugar,
+            sodium: newMeal.macros?.sodium,
+            detailedIngredients: nil,
+            detailedInstructions: nil,
+            cookingTips: nil,
+            servingInfo: nil,
+            createdAt: nil,
+            updatedAt: nil
+        )
+
+        let mealResponse = try await supabase.database
+            .from("meals")
+            .insert(databaseMeal)
+            .select()
+            .execute()
+
+        let insertedMeals = try JSONDecoder().decode([DatabaseMeal].self, from: mealResponse.data)
+        guard let insertedMeal = insertedMeals.first, let newMealId = insertedMeal.id else {
+            throw MealPlanDatabaseError.failedToCreateMeal
+        }
+
+        print("✅ New meal created with ID: \(newMealId)")
+
+        // 4. Update the day_meal entry to point to the new meal
+        struct DayMealUpdate: Codable {
+            let mealId: String
+
+            enum CodingKeys: String, CodingKey {
+                case mealId = "meal_id"
+            }
+        }
+
+        let update = DayMealUpdate(mealId: newMealId.uuidString)
+
+        try await supabase.database
+            .from("day_meals")
+            .update(update)
+            .eq("meal_plan_id", value: mealPlanId.uuidString)
+            .eq("day_name", value: dayName)
+            .eq("meal_type", value: mealType)
+            .execute()
+
+        print("✅ Meal replaced successfully for \(dayName) \(mealType)")
+    }
+
     // MARK: - Private Helper Methods
     
     private func saveMealsForMealPlan(dayMeals: [DayMeal], mealPlanId: UUID, mealType: String) async throws {
@@ -718,15 +810,30 @@ class MealPlanDatabaseService {
         var calendar = Calendar.current
         calendar.firstWeekday = 1 // Ensure Sunday is the first day (consistent with ContentView)
         calendar.timeZone = TimeZone.current // Use local timezone instead of UTC
-        
+
         let today = Date()
         let weekStart = calendar.dateInterval(of: .weekOfYear, for: today)?.start ?? today
-        
+
         print("🌍 DEBUG: Using timezone: \(calendar.timeZone.identifier)")
         print("🌍 DEBUG: Local today: \(today)")
         print("🌍 DEBUG: Local week start: \(weekStart)")
-        
+
         return weekStart
+    }
+
+    private func getWeekStartDate(for date: Date) -> Date {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 1 // Ensure Sunday is the first day
+        calendar.timeZone = TimeZone.current
+
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        return weekStart
+    }
+
+    private func getDayName(for date: Date) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEEE" // Full day name
+        return dateFormatter.string(from: date)
     }
     
     /// Get the current authenticated user's ID
@@ -766,11 +873,14 @@ enum MealPlanDatabaseError: LocalizedError {
     case failedToCreateMeal
     case networkError(Error)
     case invalidData
-    
+    case mealPlanNotFound
+
     var errorDescription: String? {
         switch self {
         case .userNotAuthenticated:
             return "User is not authenticated"
+        case .mealPlanNotFound:
+            return "Meal plan not found"
         case .failedToCreateMealPlan:
             return "Failed to create meal plan"
         case .failedToCreateMeal:

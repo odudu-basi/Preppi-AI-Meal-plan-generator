@@ -170,6 +170,11 @@ struct ProgressTabView: View {
                             // Header
                             headerSection
 
+                            // Weekly Target Card (only show if started)
+                            if hasStartDate {
+                                weeklyTargetCard
+                            }
+
                             // 3-Month Overview Card with overlay if no start date
                             ZStack {
                                 threeMonthOverviewCard
@@ -178,11 +183,6 @@ struct ProgressTabView: View {
                                 if !hasStartDate {
                                     startJourneyOverlay
                                 }
-                            }
-
-                            // Weekly Target Card (only show if started)
-                            if hasStartDate {
-                                weeklyTargetCard
                             }
 
                             // Reset Button (only show if started)

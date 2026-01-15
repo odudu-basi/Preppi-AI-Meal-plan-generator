@@ -54,4 +54,20 @@ class ConfigurationService {
         }
         return token
     }
+
+    var resendAPIKey: String {
+        guard let key = config["Resend_API_Key"] as? String, !key.isEmpty else {
+            print("❌ Resend API Key not found in APIKeys.plist")
+            return "" // Return empty string instead of crashing
+        }
+        return key
+    }
+
+    var togetherAIAPIKey: String {
+        guard let key = config["Together_AI_API_Key"] as? String, !key.isEmpty else {
+            print("❌ Together.ai API Key not found in APIKeys.plist")
+            return "" // Return empty string instead of crashing
+        }
+        return key
+    }
 }

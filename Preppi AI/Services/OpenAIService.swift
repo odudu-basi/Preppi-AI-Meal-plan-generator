@@ -3,14 +3,15 @@ import UIKit
 
 class OpenAIService: ObservableObject {
     static let shared = OpenAIService()
-    
+
     private let apiKey = ConfigurationService.shared.openAIAPIKey
+    private let togetherAIAPIKey = ConfigurationService.shared.togetherAIAPIKey
     private let baseURL = "https://api.openai.com/v1/chat/completions"
-    private let imageGenerationURL = "https://api.openai.com/v1/images/generations"
-    
+    private let imageGenerationURL = "https://api.together.xyz/v1/images/generations"
+
     @Published var isGenerating = false
     @Published var errorMessage: String?
-    
+
     private init() {}
     
     // MARK: - Week Identifier Helper
@@ -258,19 +259,19 @@ class OpenAIService: ObservableObject {
         )
     }
     
-    func generateMealPlan(for userData: UserOnboardingData, cuisines: [String] = [], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3, weekIdentifier: String? = nil) async throws -> [DayMeal] {
+    func generateMealPlan(for userData: UserOnboardingData, cuisines: [String] = [], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle = .newMealEveryTime, mealCount: Int = 3, weekIdentifier: String? = nil, flowData: MealPlanFlowData? = nil) async throws -> [DayMeal] {
         await MainActor.run {
             isGenerating = true
             errorMessage = nil
         }
-        
+
         defer {
             Task { @MainActor in
                 isGenerating = false
             }
         }
-        
-        let prompt = createMealPlanPrompt(from: userData, cuisines: cuisines, mealType: mealType, preparationStyle: preparationStyle, mealCount: mealCount)
+
+        let prompt = createMealPlanPrompt(from: userData, cuisines: cuisines, mealType: mealType, preparationStyle: preparationStyle, mealCount: mealCount, flowData: flowData)
         
         let requestBody: [String: Any] = [
             "model": "gpt-4o",
@@ -346,10 +347,22 @@ class OpenAIService: ObservableObject {
             }
             
             var dayMeals: [DayMeal] = []
-            let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-            
+
+            // Determine which days to use based on flowData
+            let dayNames: [String]
+            if let selectedDays = flowData?.selectedDays, !selectedDays.isEmpty {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEEE" // Full day name
+                dayNames = selectedDays.map { formatter.string(from: $0) }
+                print("🗓️ DEBUG: Using selected days from flow data: \(dayNames)")
+            } else {
+                // Default to all 7 days if no specific days selected
+                dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+                print("🗓️ DEBUG: No flow data, using default 7 days: \(dayNames)")
+            }
+
             for (index, mealData) in mealsArray.enumerated() {
-                guard index < weekdays.count,
+                guard index < dayNames.count,
                       let name = mealData["name"] as? String,
                       let description = mealData["description"] as? String,
                       let calories = mealData["calories"] as? Int,
@@ -409,7 +422,7 @@ class OpenAIService: ObservableObject {
                 )
                 
                 let dayMeal = DayMeal(
-                    day: weekdays[index],
+                    day: dayNames[index],
                     meal: meal
                 )
                 
@@ -451,11 +464,16 @@ class OpenAIService: ObservableObject {
         }
     }
     
-    private func createMealPlanPrompt(from userData: UserOnboardingData, cuisines: [String], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle, mealCount: Int = 3) -> String {
+    private func createMealPlanPrompt(from userData: UserOnboardingData, cuisines: [String], mealType: String = "dinner", preparationStyle: MealPlanInfoView.MealPreparationStyle, mealCount: Int = 3, flowData: MealPlanFlowData? = nil) -> String {
         let mealTypeCapitalized = mealType.capitalized
+
+        // Determine number of days based on flowData or default to 7
+        let numberOfDays = flowData?.selectedDays.count ?? 7
+        let dayDescriptor = numberOfDays == 7 ? "7-day" : "\(numberOfDays)-day"
+
         var prompt = """
-        Create a 7-day \(mealType) meal plan for a person with the following profile:
-        
+        Create a \(dayDescriptor) \(mealType) meal plan for a person with the following profile:
+
         Name: \(userData.name)
         Sex: \(userData.sex?.rawValue ?? "Not specified")
         Age: \(userData.age)
@@ -496,7 +514,37 @@ class OpenAIService: ObservableObject {
             let allergies = userData.foodAllergies.map { $0.rawValue }.joined(separator: ", ")
             prompt += "\nFood Allergies: \(allergies)"
         }
-        
+
+        // Add meal plan flow data if available
+        if let flowData = flowData {
+            prompt += "\n\nAVAILABLE INGREDIENTS IN KITCHEN:"
+
+            if !flowData.availableProteins.isEmpty {
+                prompt += "\nProteins: \(flowData.availableProteins.joined(separator: ", "))"
+                prompt += "\nSTRICT REQUIREMENT: Use ONLY these protein sources in the meal plan. Do not include any proteins not listed above."
+            }
+
+            if !flowData.availableCarbs.isEmpty {
+                prompt += "\nCarbohydrates: \(flowData.availableCarbs.joined(separator: ", "))"
+                prompt += "\nSTRICT REQUIREMENT: Use ONLY these carbohydrate sources in the meal plan. Do not include any carbs not listed above."
+            }
+
+            if !flowData.availableFats.isEmpty {
+                prompt += "\nFats: \(flowData.availableFats.joined(separator: ", "))"
+                prompt += "\nSTRICT REQUIREMENT: Use ONLY these fat sources in the meal plan. Do not include any fats not listed above."
+            }
+
+            if !flowData.availableSpices.isEmpty {
+                prompt += "\nSpices & Seasonings: \(flowData.availableSpices.joined(separator: ", "))"
+            }
+
+            if !flowData.specificMealRequests.isEmpty {
+                prompt += "\n\nSPECIFIC MEAL REQUESTS:"
+                prompt += "\n\(flowData.specificMealRequests)"
+                prompt += "\nIMPORTANT: Try to accommodate these specific meal requests where possible while staying within the available ingredients and dietary restrictions."
+            }
+        }
+
         // Add cuisine preferences
         if !cuisines.isEmpty {
             prompt += "\nSelected Cuisines: \(cuisines.joined(separator: ", "))"
@@ -509,16 +557,34 @@ class OpenAIService: ObservableObject {
         
         switch preparationStyle {
         case .newMealEveryTime:
-            prompt += "\nEnsure each meal is unique and different from the others. Vary cooking methods, ingredients, and flavors throughout the week."
+            prompt += "\nEnsure each meal is unique and different from the others. Vary cooking methods, ingredients, and flavors."
         case .multiplePortions:
-            prompt += "\nDesign meals for BATCH COOKING with planned leftovers. Create exactly \(mealCount) unique meals that will be cooked in large portions and repeated throughout the week to fill all 7 days. For repeated meals, indicate which day the meal was originally prepared. Include make-ahead tips and storage suggestions."
+            let daysText = numberOfDays == 7 ? "all 7 days" : "all \(numberOfDays) days"
+            prompt += "\nDesign meals for BATCH COOKING with planned leftovers. Create exactly \(mealCount) unique meals that will be cooked in large portions and repeated to fill \(daysText). For repeated meals, indicate which day the meal was originally prepared. Include make-ahead tips and storage suggestions."
         }
         
         let calorieRange = CalorieCalculationService.shared.calculateMealCalorieRange(for: userData, mealType: mealType)
-        
+
+        // Format selected days if available
+        var daysInstruction = "Please create exactly \(numberOfDays) \(mealType) meal"
+        if numberOfDays > 1 {
+            daysInstruction += "s"
+        }
+
+        if let selectedDays = flowData?.selectedDays, !selectedDays.isEmpty {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEEE" // Full day name (e.g., "Monday")
+            let dayNames = selectedDays.map { formatter.string(from: $0) }
+            daysInstruction += " (one for each of these days: \(dayNames.joined(separator: ", ")))"
+        } else if numberOfDays == 7 {
+            daysInstruction += " (one for each day of the week: Sunday through Saturday)"
+        }
+
+        daysInstruction += " AND a comprehensive shopping list."
+
         prompt += """
-        
-        Please create exactly 7 \(mealType) meals (one for each day of the week: Sunday through Saturday) AND a comprehensive shopping list.
+
+        \(daysInstruction)
         
         For each meal, provide:
         1. A creative and appealing meal name
@@ -535,13 +601,13 @@ class OpenAIService: ObservableObject {
         - Essential seasonings and herbs
         
         For the shopping list, provide:
-        - Consolidated list of ALL ingredients needed for the entire week
+        - Consolidated list of ALL ingredients needed for all \(numberOfDays) days
         - Organized by categories (Proteins, Vegetables, Pantry Items, Dairy, etc.)
-        - Estimated quantities needed for all 7 meals
+        - Estimated quantities needed for all \(numberOfDays) meal\(numberOfDays == 1 ? "" : "s")
         - Include both main ingredients and seasonings/condiments
-        
+
         Ensure the meals:
-        - Fit within their budget when divided by 7 days
+        - Fit within their budget when divided by \(numberOfDays) day\(numberOfDays == 1 ? "" : "s")
         - Match their dietary restrictions and allergies
         - Align with their health goals
         - Are appropriate for their cooking skill level
@@ -781,23 +847,23 @@ class OpenAIService: ObservableObject {
         }
         
         let prompt = createImagePrompt(for: meal)
-        
+
         let requestBody: [String: Any] = [
-            "model": "dall-e-3",
+            "model": "black-forest-labs/FLUX.1-schnell",
             "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024",
-            "quality": "hd",
-            "style": "natural"
+            "width": 1024,
+            "height": 1024,
+            "steps": 4,
+            "n": 1
         ]
-        
+
         guard let url = URL(string: imageGenerationURL) else {
             throw OpenAIError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(togetherAIAPIKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         do {
@@ -830,7 +896,7 @@ class OpenAIService: ObservableObject {
                 throw OpenAIError.parsingError
             }
             
-            print("🔗 Generated temporary DALL-E URL: \(temporaryImageUrl)")
+            print("🔗 Generated temporary FLUX image URL: \(temporaryImageUrl)")
             
             // Download and store the image permanently in Supabase Storage
             print("📥 Downloading and storing image permanently...")
@@ -852,7 +918,7 @@ class OpenAIService: ObservableObject {
         }
     }
     
-    /// Generates a meal image temporarily (returns DALL-E URL without saving to storage)
+    /// Generates a meal image temporarily (returns FLUX image URL without saving to storage)
     /// Use this during meal planning when you don't want to save the image permanently yet
     func generateMealImageTemporary(for meal: Meal) async throws -> String {
         // Note: Not setting global isGenerating to avoid full-page loading view
@@ -863,23 +929,23 @@ class OpenAIService: ObservableObject {
         }
         
         let prompt = createImagePrompt(for: meal)
-        
+
         let requestBody: [String: Any] = [
-            "model": "dall-e-3",
+            "model": "black-forest-labs/FLUX.1-schnell",
             "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024",
-            "quality": "hd",
-            "style": "natural"
+            "width": 1024,
+            "height": 1024,
+            "steps": 4,
+            "n": 1
         ]
-        
+
         guard let url = URL(string: imageGenerationURL) else {
             throw OpenAIError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(togetherAIAPIKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         do {
@@ -912,7 +978,7 @@ class OpenAIService: ObservableObject {
                 throw OpenAIError.parsingError
             }
             
-            print("🔗 Generated temporary DALL-E URL (not saved): \(temporaryImageUrl)")
+            print("🔗 Generated temporary FLUX image URL (not saved): \(temporaryImageUrl)")
             return temporaryImageUrl
             
         } catch {
@@ -1087,14 +1153,14 @@ class OpenAIService: ObservableObject {
     private func createMealAnalysisPrompt() -> String {
         return """
         Analyze this food image and provide detailed nutritional information. Look carefully at the food items, portion sizes, and ingredients visible in the image.
-        
+
         Please identify:
         1. The name of the meal/dish (be descriptive and appetizing)
         1b. A vivid but accurate one-sentence description of what is in the image (ingredients, style, cooking method)
         2. Estimated calories for the entire portion shown
         3. Detailed macronutrient breakdown in grams
         4. Health score from 1-10 based on nutritional balance, ingredient quality, and overall healthiness
-        
+
         Guidelines for analysis:
         - Be as accurate as possible with portion size estimation
         - Consider all visible ingredients and components
@@ -1102,7 +1168,7 @@ class OpenAIService: ObservableObject {
         - Include hidden ingredients like oils, dressings, and seasonings
         - Provide realistic macro values based on standard nutritional data
         - Health score should consider: nutrient density, balance of macros, processing level, vegetable content
-        
+
         Respond ONLY with valid JSON in this exact format:
         {
           "mealName": "Descriptive name of the meal",
@@ -1119,6 +1185,362 @@ class OpenAIService: ObservableObject {
           "healthScore": 8
         }
         """
+    }
+
+    // MARK: - Meal Analysis Refinement
+
+    /// Refines an existing meal analysis with additional user-provided details
+    func refineMealAnalysis(_ image: UIImage, currentAnalysis: MealAnalysisResult, additionalDetails: String) async throws -> MealAnalysisResult {
+        await MainActor.run {
+            isGenerating = true
+            errorMessage = nil
+        }
+
+        defer {
+            Task { @MainActor in
+                isGenerating = false
+            }
+        }
+
+        // Convert image to base64
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw OpenAIError.invalidRequest
+        }
+        let base64Image = imageData.base64EncodedString()
+
+        let prompt = createMealRefinementPrompt(currentAnalysis: currentAnalysis, additionalDetails: additionalDetails)
+
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o",
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You are a professional nutritionist and food analyst. Refine nutritional information based on additional user details. Always respond with valid JSON format."
+                ],
+                [
+                    "role": "user",
+                    "content": [
+                        [
+                            "type": "text",
+                            "text": prompt
+                        ],
+                        [
+                            "type": "image_url",
+                            "image_url": [
+                                "url": "data:image/jpeg;base64,\(base64Image)"
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "max_tokens": 1000,
+            "temperature": 0.3
+        ]
+
+        guard let url = URL(string: baseURL) else {
+            throw OpenAIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+
+        do {
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            let content = openAIResponse.choices.first?.message.content ?? ""
+
+            // Clean the content to extract JSON
+            let cleanedContent = content
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // Parse the JSON response
+            guard let contentData = cleanedContent.data(using: .utf8) else {
+                print("❌ Failed to convert content to data: \(content)")
+                throw OpenAIError.parsingError
+            }
+
+            let analysisResponse = try JSONDecoder().decode(MealAnalysisResponse.self, from: contentData)
+
+            let macros = Macros(
+                protein: analysisResponse.macros.protein,
+                carbohydrates: analysisResponse.macros.carbohydrates,
+                fat: analysisResponse.macros.fat,
+                fiber: analysisResponse.macros.fiber,
+                sugar: analysisResponse.macros.sugar,
+                sodium: analysisResponse.macros.sodium
+            )
+
+            return MealAnalysisResult(
+                mealName: analysisResponse.mealName,
+                description: analysisResponse.description,
+                macros: macros,
+                calories: analysisResponse.calories,
+                healthScore: analysisResponse.healthScore
+            )
+
+        } catch {
+            print("❌ Failed to parse refined meal analysis: \(error)")
+            throw OpenAIError.parsingError
+        }
+    }
+
+    private func createMealRefinementPrompt(currentAnalysis: MealAnalysisResult, additionalDetails: String) -> String {
+        return """
+        I previously analyzed this meal image and got the following results:
+
+        Current Analysis:
+        - Meal Name: \(currentAnalysis.mealName)
+        - Description: \(currentAnalysis.description)
+        - Calories: \(currentAnalysis.calories)
+        - Protein: \(currentAnalysis.macros.protein)g
+        - Carbohydrates: \(currentAnalysis.macros.carbohydrates)g
+        - Fat: \(currentAnalysis.macros.fat)g
+        - Fiber: \(currentAnalysis.macros.fiber)g
+        - Sugar: \(currentAnalysis.macros.sugar)g
+        - Sodium: \(currentAnalysis.macros.sodium)mg
+        - Health Score: \(currentAnalysis.healthScore)/10
+
+        The user has provided additional details that I may have missed:
+        "\(additionalDetails)"
+
+        Please re-analyze this meal image taking into account the user's additional details. Adjust the nutritional information, meal name, and description accordingly to be more accurate.
+
+        Guidelines:
+        - Carefully consider the user's additional details (e.g., portion size, extra ingredients, cooking methods)
+        - Update the meal name if necessary to reflect new information
+        - Adjust calories and macros based on the new details
+        - Update the description to include the new information
+        - Recalculate the health score if the additional details significantly change the nutritional profile
+        - Be precise with portion size adjustments
+        - Account for any additional ingredients or modifications mentioned
+
+        Respond ONLY with valid JSON in this exact format:
+        {
+          "mealName": "Updated descriptive name of the meal",
+          "description": "Updated accurate description including the new details",
+          "calories": 750,
+          "macros": {
+            "protein": 50.2,
+            "carbohydrates": 60.5,
+            "fat": 22.3,
+            "fiber": 9.1,
+            "sugar": 14.5,
+            "sodium": 950.0
+          },
+          "healthScore": 7
+        }
+        """
+    }
+
+    // MARK: - Meal Text Analysis
+
+    /// Analyzes meal description text and returns meal information
+    func analyzeMealText(_ prompt: String) async throws -> String {
+        await MainActor.run {
+            isGenerating = true
+            errorMessage = nil
+        }
+
+        defer {
+            Task { @MainActor in
+                isGenerating = false
+            }
+        }
+
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o",
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You are a professional nutritionist and meal planner. Analyze meal descriptions and provide accurate nutritional information. Always respond with valid JSON format."
+                ],
+                [
+                    "role": "user",
+                    "content": prompt
+                ]
+            ],
+            "max_tokens": 2000,
+            "temperature": 0.7
+        ]
+
+        guard let url = URL(string: baseURL) else {
+            throw OpenAIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+
+        do {
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            let content = openAIResponse.choices.first?.message.content ?? ""
+
+            // Clean the content to extract JSON
+            let cleanedContent = content
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            return cleanedContent
+        } catch {
+            print("❌ Failed to parse OpenAI response: \(error)")
+            throw OpenAIError.parsingError
+        }
+    }
+
+    // MARK: - Exercise Analysis
+
+    /// Analyzes exercise description text and returns calorie and activity information
+    func analyzeExerciseText(_ description: String) async throws -> String {
+        await MainActor.run {
+            isGenerating = true
+            errorMessage = nil
+        }
+
+        defer {
+            Task { @MainActor in
+                isGenerating = false
+            }
+        }
+
+        let prompt = """
+        Analyze the following exercise description and provide:
+        1. A brief summary of the workout
+        2. Estimated total calories burned
+        3. List of individual exercises with duration and intensity
+
+        Exercise description: \(description)
+
+        Respond ONLY with valid JSON in this exact format:
+        {
+            "summary": "Brief summary of the workout",
+            "caloriesBurned": 350,
+            "exercises": [
+                {
+                    "name": "Exercise name",
+                    "duration": "Duration (e.g., 30 minutes)",
+                    "intensity": "low/moderate/high"
+                }
+            ]
+        }
+        """
+
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o",
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You are a professional fitness trainer and exercise analyst. Analyze exercise descriptions and provide accurate calorie estimates. Always respond with valid JSON format."
+                ],
+                [
+                    "role": "user",
+                    "content": prompt
+                ]
+            ],
+            "max_tokens": 500,
+            "temperature": 0.3
+        ]
+
+        guard let url = URL(string: baseURL) else {
+            throw OpenAIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            throw OpenAIError.invalidRequest
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OpenAIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorData["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                await MainActor.run {
+                    errorMessage = message
+                }
+                throw OpenAIError.apiError(message)
+            }
+            throw OpenAIError.invalidResponse
+        }
+
+        do {
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            let content = openAIResponse.choices.first?.message.content ?? ""
+
+            // Clean the content to extract JSON
+            let cleanedContent = content
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            return cleanedContent
+        } catch {
+            print("❌ Failed to parse OpenAI response: \(error)")
+            throw OpenAIError.parsingError
+        }
     }
 }
 

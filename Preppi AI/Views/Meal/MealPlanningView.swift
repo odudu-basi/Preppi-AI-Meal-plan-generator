@@ -46,8 +46,25 @@ struct MealPlanningView: View {
     }
 
     
-    private let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    private let weekdayIcons = ["✨", "🌟", "⚡", "🔥", "💪", "🎯", "🌈"]
+    // Dynamic weekdays based on selected days from flow data
+    private var weekdays: [String] {
+        // Get selected days from flow data
+        if let flowData = appState.currentMealPlanFlowData, !flowData.selectedDays.isEmpty {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "EEEE" // Full day name
+            return flowData.selectedDays.map { dateFormatter.string(from: $0) }
+        } else {
+            // Fallback to all weekdays if no flow data
+            return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        }
+    }
+    
+    // Dynamic icons based on number of selected days
+    private var weekdayIcons: [String] {
+        let allIcons = ["✨", "🌟", "⚡", "🔥", "💪", "🎯", "🌈"]
+        let numberOfDays = weekdays.count
+        return Array(allIcons.prefix(numberOfDays))
+    }
     
     var body: some View {
         ZStack {
@@ -230,7 +247,7 @@ struct MealPlanningView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.green)
             
-            Text("Your Weekly Meal Plan")
+            Text(weekdays.count == 7 ? "Your Weekly Meal Plan" : "Your \(weekdays.count)-Day Meal Plan")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
@@ -271,7 +288,7 @@ struct MealPlanningView: View {
             
             Spacer()
             
-            Text("\(selectedDayIndex + 1)/7")
+            Text("\(selectedDayIndex + 1)/\(weekdays.count)")
                 .font(.subheadline)
                 .foregroundColor(.green)
                 .padding(.horizontal, 12)
@@ -698,13 +715,27 @@ struct MealPlanningView: View {
         Task {
             do {
                 let weekIdentifier = selectedDate.map { getWeekIdentifier(for: $0) }
+
+                // Get meal plan flow data from AppState
+                let flowData = appState.currentMealPlanFlowData
+
+                print("📝 Generating meal plan with flow data:")
+                if let flowData = flowData {
+                    print("   - Proteins: \(flowData.availableProteins.joined(separator: ", "))")
+                    print("   - Carbs: \(flowData.availableCarbs.joined(separator: ", "))")
+                    print("   - Fats: \(flowData.availableFats.joined(separator: ", "))")
+                    print("   - Spices: \(flowData.availableSpices.joined(separator: ", "))")
+                    print("   - Specific Requests: \(flowData.specificMealRequests)")
+                }
+
                 let generatedMeals = try await openAIService.generateMealPlan(
                     for: appState.userData,
                     cuisines: selectedCuisines,
                     mealType: appState.currentMealTypeBeingCreated,
                     preparationStyle: mealPreparationStyle,
                     mealCount: mealCount,
-                    weekIdentifier: weekIdentifier
+                    weekIdentifier: weekIdentifier,
+                    flowData: flowData
                 )
                 await MainActor.run {
                     mealPlan = generatedMeals
